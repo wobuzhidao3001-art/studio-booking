@@ -3,13 +3,13 @@
 学校演播厅预约管理系统，支持多角色审批流程，覆盖从申请提交到事后报告的全流程管理。
 
 <p align="center">
-  <img src="screenshots/截屏2026-06-04 19.51.50.png" alt="首页工作台" width="700">
+  <img src="screenshots/2026-06-04 19.51.50.png" alt="首页工作台" width="700">
   <br>
   <em>首页工作台 — 色块时间轴展示每日预约情况 · 公示栏预览 · 最近申请</em>
 </p>
 
 <p align="center">
-  <img src="screenshots/截屏2026-06-04 19.52.01.png" alt="公示栏" width="700">
+  <img src="screenshots/2026-06-04 19.52.01.png" alt="公示栏" width="700">
   <br>
   <em>公示栏 — 已完成使用记录的评分公示 + 时间段色块条 + 合格/不合格印章</em>
 </p>
