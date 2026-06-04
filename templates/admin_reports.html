@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold text-gray-800 mb-6">已完成申请 & 导出</h2>
+
+<div class="card mb-6">
+    <div class="flex flex-col sm:flex-row gap-3 items-end">
+        <div><label class="label">开始日期</label><input id="start-date" type="date" class="input"></div>
+        <div><label class="label">结束日期</label><input id="end-date" type="date" class="input"></div>
+        <button onclick="doQuery()" class="btn-primary"><i class="fa-solid fa-search mr-1"></i>查询</button>
+        <button onclick="doExport()" class="btn-success"><i class="fa-solid fa-download mr-1"></i>导出CSV</button>
+        <label class="btn-outline cursor-pointer"><i class="fa-solid fa-upload mr-1"></i>导入CSV<input type="file" id="import-file" accept=".csv" class="hidden" onchange="doImport()"></label>
+    </div>
+</div>
+
+<div class="card overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead><tr class="border-b text-left text-gray-500"><th class="py-3 px-2">ID</th><th class="py-3 px-2">主题</th><th class="py-3 px-2">学部</th><th class="py-3 px-2">申请人</th><th class="py-3 px-2">现场负责人</th><th class="py-3 px-2">类型</th><th class="py-3 px-2">时间</th><th class="py-3 px-2">执行人</th><th class="py-3 px-2">得分</th></tr></thead>
+        <tbody id="rtbody"><tr><td colspan="9" class="py-8 text-center text-gray-400">请选择日期后点查询</td></tr></tbody>
+    </table>
+    <div id="rsummary" class="text-sm text-gray-500 mt-3 px-2"></div>
+</div>
+
+<script>
+async function doQuery() {
+    var sd = document.getElementById("start-date").value;
+    var ed = document.getElementById("end-date").value;
+    var tb = document.getElementById("rtbody");
+    tb.innerHTML = '<tr><td colspan="9" class="py-8 text-center text-gray-400">查询中...</td></tr>';
+
+    try {
+        var data = await api("/api/applications?status=reported");
+        var all = data.applications;
+        var filtered = all;
+
+        if (sd || ed) {
+            filtered = [];
+            for (var i = 0; i < all.length; i++) {
+                var dt = all[i].start_time.substring(0, 10);
+                if (sd && dt < sd) continue;
+                if (ed && dt > ed) continue;
+                filtered.push(all[i]);
+            }
+        }
+
+        if (filtered.length === 0) {
+            tb.innerHTML = '<tr><td colspan="9" class="py-8 text-center text-gray-400">无匹配记录</td></tr>';
+            document.getElementById("rsummary").textContent = "";
+            return;
+        }
+
+        var h = "";
+        var sum = 0;
+        for (var i = 0; i < filtered.length; i++) {
+            var a = filtered[i];
+            var sc = (a.score !== null && a.score !== undefined) ? a.score : "-";
+            if (typeof sc === "number") sum += sc;
+            var color = sc >= 8 ? "text-green-600" : sc >= 6 ? "text-yellow-600" : "text-red-600";
+            h += "<tr class='border-b hover:bg-gray-50'>";
+            h += "<td class='py-3 px-2'>" + a.id + "</td>";
+            h += "<td class='py-3 px-2 font-medium'>" + a.meeting_topic + "</td>";
+            h += "<td class='py-3 px-2'>" + a.department + "</td>";
+            h += "<td class='py-3 px-2'>" + a.applicant_name + "</td>";
+            h += "<td class='py-3 px-2'>" + (a.on_site_contact || "") + "</td>"; h += "<td class='py-3 px-2'>" + a.meeting_type_name + "</td>";
+            h += "<td class='py-3 px-2'>" + formatTime(a.start_time) + " ~ " + formatTime(a.end_time) + "</td>";
+            h += "<td class='py-3 px-2'>" + (a.executor_name || "") + "</td>";
+            h += "<td class='py-3 px-2 font-bold " + color + "'>" + sc + "</td>";
+            h += "</tr>";
+        }
+        tb.innerHTML = h;
+        var avg = filtered.length > 0 && typeof filtered[0].score === "number" ? (sum / filtered.length).toFixed(1) : "-";
+        document.getElementById("rsummary").textContent = "共 " + filtered.length + " 条，平均分：" + avg;
+    } catch(e) {
+        tb.innerHTML = '<tr><td colspan="9" class="py-8 text-center text-red-400">' + e.message + '</td></tr>';
+    }
+}
+
+function doExport() {
+    var sd = document.getElementById("start-date").value;
+    var ed = document.getElementById("end-date").value;
+    var p = [];
+    if (sd) p.push("start_date=" + sd);
+    if (ed) p.push("end_date=" + ed);
+    if (p.length === 0) { showToast("请先选择日期范围", "error"); return; }
+    window.open("/api/admin/reports/export?" + p.join("&"), "_blank");
+}
+
+async function doImport() {
+    var file = document.getElementById("import-file").files[0];
+    if (!file) return;
+    if (!confirm("确认导入 " + file.name + "？\\n将创建已完成申请和报告。")) return;
+    var tb = document.getElementById("rtbody");
+    tb.innerHTML = '<tr><td colspan="9" class="py-8 text-center text-gray-400">导入中...</td></tr>';
+    var fd = new FormData();
+    fd.append("file", file);
+    try {
+        var res = await apiForm("/api/admin/reports/import", fd);
+        showToast("成功导入 " + res.imported + " 条" + (res.errors.length > 0 ? "，" + res.errors.length + " 条错误" : ""));
+        document.getElementById("import-file").value = "";
+        doQuery();
+    } catch(e) {
+        tb.innerHTML = '<tr><td colspan="9" class="py-8 text-center text-red-400">导入失败: ' + e.message + '</td></tr>';
+    }
+}
+</script>
+{% endblock %}

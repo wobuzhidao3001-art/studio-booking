@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    container_name: studio-booking
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    environment:
+      - JWT_SECRET=change-this-to-a-random-string
+      - JWT_EXPIRE_HOURS=24
+      - DATABASE_PATH=data/app.db
+      - UPLOAD_DIR=uploads
+    restart: unless-stopped

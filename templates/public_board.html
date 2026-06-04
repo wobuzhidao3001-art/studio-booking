@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold text-gray-800 mb-6">📢 公示栏</h2>
+<p class="text-gray-500 mb-6 text-sm">以下为所有已完成的使用记录，得分≥10分为合格，<10分为不合格。</p>
+
+<!-- 图例 -->
+<div class="flex gap-4 mb-5 text-xs font-medium text-gray-500 bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100">
+    <span><span class="inline-block w-3 h-3 rounded-sm mr-1 align-middle" style="background:linear-gradient(135deg,#ff9f0a,#ffb340)"></span>上午</span>
+    <span><span class="inline-block w-3 h-3 rounded-sm mr-1 align-middle" style="background:linear-gradient(135deg,#ff6b9d,#ff8ab5)"></span>午间</span>
+    <span><span class="inline-block w-3 h-3 rounded-sm mr-1 align-middle" style="background:linear-gradient(135deg,#007aff,#3395ff)"></span>下午</span>
+    <span><span class="inline-block w-3 h-3 rounded-sm mr-1 align-middle" style="background:linear-gradient(135deg,#5e5ce6,#7c7aff)"></span>傍晚</span>
+    <span><span class="inline-block w-3 h-3 rounded-sm mr-1 align-middle" style="background:linear-gradient(135deg,#bf5af2,#d07cff)"></span>晚间</span>
+</div>
+
+<div id="board-list" class="space-y-4">
+    <div class="card text-center text-gray-400 py-8">加载中...</div>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onclick="closeLightbox()">
+    <button class="absolute top-4 right-4 text-white text-3xl">&times;</button>
+    <img id="lightbox-img" class="max-w-full max-h-[90vh] rounded-lg object-contain" src="" alt="">
+</div>
+
+<style>
+.board-item{background:#fff;border-radius:18px;padding:20px 22px;box-shadow:0 1px 4px rgba(0,0,0,0.06);border:1.5px solid #e5e7eb;transition:all 0.2s;position:relative;overflow:hidden}
+.board-item:hover{border-color:#c7c4ff;box-shadow:0 4px 20px rgba(94,92,230,0.08)}
+.board-item .stamp{position:absolute;top:16px;right:16px;font-size:13px;font-weight:800;padding:3px 12px;border:2px solid;border-radius:8px;transform:rotate(6deg);letter-spacing:1px}
+
+/* 时间段色块条 */
+.time-bar-wrap{margin-bottom:12px}
+.time-bar{display:flex;height:22px;background:#f3f4f6;border-radius:8px;overflow:hidden;gap:1px;padding:1px}
+.time-bar .tb-seg{flex:1;height:100%;border-radius:3px}
+.tb-morning{background:linear-gradient(180deg,#ff9f0a,#ffb340)}
+.tb-midday{background:linear-gradient(180deg,#ff6b9d,#ff8ab5)}
+.tb-afternoon{background:linear-gradient(180deg,#007aff,#3395ff)}
+.tb-evening{background:linear-gradient(180deg,#5e5ce6,#7c7aff)}
+.tb-night{background:linear-gradient(180deg,#bf5af2,#d07cff)}
+
+.time-labels{display:flex;justify-content:space-between;font-size:9px;color:#9ca3af;padding:0 2px;margin-top:2px}
+
+.board-header{margin-bottom:12px;padding-right:80px}
+.board-header h3{font-size:17px;font-weight:700;color:#111827;margin-bottom:2px}
+.board-header .meta{font-size:12px;color:#9ca3af;display:flex;gap:8px;flex-wrap:wrap}
+.board-header .meta .tag{background:#f3f4f6;padding:1px 8px;border-radius:6px;color:#6b7280;font-weight:500}
+
+.board-score{position:absolute;top:18px;right:22px;text-align:center}
+.board-score .num{font-size:22px;font-weight:900;line-height:1}
+.board-score .label{font-size:9px;color:#9ca3af;margin-top:2px}
+
+.check-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px}
+@media(min-width:768px){.check-grid{grid-template-columns:repeat(3,1fr)}}
+.check-card{background:#f9fafb;border-radius:12px;padding:12px 14px}
+.check-card .check-title{font-size:12px;font-weight:600;color:#6b7280;margin-bottom:4px}
+.check-card .check-text{font-size:13px;color:#1d1d1f}
+.check-card .check-photos{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.check-card .check-photos img{width:56px;height:56px;object-fit:cover;border-radius:8px;cursor:pointer;transition:all 0.12s}
+.check-card .check-photos img:hover{opacity:0.8;transform:scale(1.05)}
+</style>
+
+<script>
+// ===== 时间段颜色工具 =====
+var SLOT_START=7.5, SLOTS=27;
+function getTimeColor(hour){
+    if(hour<9) return 'morning';
+    if(hour<12) return 'morning';
+    if(hour<13) return 'midday';
+    if(hour<17) return 'afternoon';
+    if(hour<19) return 'evening';
+    return 'night';
+}
+
+function renderTimeBar(startTime, endTime){
+    var st_h=parseInt(startTime.substring(11,13))+parseInt(startTime.substring(14,16))/60;
+    var et_h=parseInt(endTime.substring(11,13))+parseInt(endTime.substring(14,16))/60;
+    var ss=Math.max(0,Math.floor((st_h-SLOT_START)/0.5));
+    var es=Math.min(SLOTS,Math.ceil((et_h-SLOT_START)/0.5));
+    var h='<div class="time-bar">';
+    for(var s=0;s<SLOTS;s++){
+        var cls=s>=ss&&s<es?'tb-'+getTimeColor(SLOT_START+s*0.5):'';
+        h+='<div class="tb-seg '+cls+'"></div>';
+    }
+    h+='</div><div class="time-labels"><span>08:00</span><span>10:00</span><span>12:00</span><span>14:00</span><span>16:00</span><span>18:00</span><span>20:00</span><span>22:00</span></div>';
+    return h;
+}
+
+async function loadBoard() {
+    var list = document.getElementById('board-list');
+    try {
+        var data = await api('/api/public-board');
+        if (data.board.length === 0) {
+            list.innerHTML = '<div class="card text-center text-gray-400 py-8">暂无公示记录 🎉</div>';
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < data.board.length; i++) {
+            var item = data.board[i];
+            var photos = item.photos || [];
+            var byCat = {};
+            photos.forEach(function(p){
+                if (!byCat[p.category]) byCat[p.category] = [];
+                byCat[p.category].push(p);
+            });
+            var isOk = item.score >= 10;
+            var stampColor = isOk ? '#16a34a' : '#dc2626';
+
+            var timeBar = renderTimeBar(item.start_time, item.end_time);
+            var timeRange = formatTime(item.start_time).substring(0,16) + ' — ' + formatTime(item.end_time).substring(11,16);
+
+            html += '<div class="board-item">';
+            html += '<div class="stamp" style="border-color:'+stampColor+';color:'+stampColor+'">'+(isOk?'合格':'不合格')+'</div>';
+
+            html += '<div class="time-bar-wrap">'+timeBar+'</div>';
+
+            html += '<div class="board-header">';
+            html += '<h3>'+item.meeting_topic+'</h3>';
+            html += '<div class="meta">';
+            html += '<span>'+item.applicant_name+'</span>';
+            html += '<span class="tag">'+item.department+'</span>';
+            if(item.on_site_contact) html += '<span class="tag">'+item.on_site_contact+'</span>';
+            html += '<span class="tag">'+item.meeting_type_name+'</span>';
+            html += '</div>';
+            html += '<div class="meta" style="margin-top:4px;color:#d1d5db;font-size:11px;">申请：'+formatTime(item.app_created_at)+' · 使用：'+timeRange+'</div>';
+            html += '</div>';
+
+            html += '<div class="board-score"><div class="num" style="color:'+(item.score>=8?'#16a34a':item.score>=6?'#f59e0b':'#dc2626')+'">'+item.score+'</div><div class="label">/ 10 分</div></div>';
+
+            html += '<div class="check-grid">';
+            html += renderCheckItem('物品归位', item.items_returned, byCat['returned'] || []);
+            html += renderCheckItem('卫生保持', item.cleanliness, byCat['cleanliness'] || []);
+            html += renderCheckItem('公物损坏', item.damage || '无', byCat['damage'] || []);
+            html += '</div></div>';
+        }
+        list.innerHTML = html;
+    } catch(e) {
+        list.innerHTML = '<div class="card text-center text-red-400 py-8">加载失败: '+e.message+'</div>';
+    }
+}
+
+function renderCheckItem(title, text, photos) {
+    var h = '<div class="check-card"><div class="check-title">'+title+'</div><div class="check-text">'+text+'</div>';
+    if (photos.length > 0) {
+        h += '<div class="check-photos">';
+        for (var j = 0; j < photos.length; j++) {
+            h += '<img src="/'+photos[j].file_path+'" onclick="event.stopPropagation();openLightbox(\'/'+photos[j].file_path+'\')" alt="'+title+'">';
+        }
+        h += '</div>';
+    }
+    h += '</div>';
+    return h;
+}
+
+function openLightbox(src) {
+    document.getElementById('lightbox-img').src = src;
+    document.getElementById('lightbox').classList.remove('hidden');
+}
+
+function closeLightbox() {
+    document.getElementById('lightbox').classList.add('hidden');
+}
+
+loadBoard();
+</script>
+{% endblock %}

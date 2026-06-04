@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold text-gray-800 mb-6">📋 我的申请</h2>
+
+<div class="flex gap-2 flex-wrap mb-6" id="filter-bar">
+    <button data-filter="" class="px-4 py-2 rounded-full text-sm font-medium bg-primary-600 text-white">全部</button>
+    <button data-filter="pending" class="px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">待审批</button>
+    <button data-filter="dept_approved" class="px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">待终审</button>
+    <button data-filter="studio_approved" class="px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">待分配</button>
+    <button data-filter="assigned" class="px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">进行中</button>
+    <button data-filter="reported" class="px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">已完成</button>
+    <button data-filter="rejected" class="px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">已驳回</button>
+</div>
+
+<div id="app-list" class="space-y-3">
+    <div class="card text-center text-gray-400 py-8">加载中...</div>
+</div>
+
+<!-- 删除确认弹窗 -->
+<div id="deleteModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60" onclick="closeDeleteModal(event)">
+    <div class="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl" onclick="event.stopPropagation()">
+        <div class="text-center mb-5">
+            <div class="w-14 h-14 mx-auto mb-3 rounded-full bg-red-50 flex items-center justify-center">
+                <i class="fa-solid fa-trash-can text-red-500 text-xl"></i>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900">确认删除</h3>
+            <p class="text-sm text-gray-500 mt-1">此操作不可恢复，相关报告和审批记录将一并删除。</p>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="closeDeleteModal()" class="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-50 transition-colors">取消</button>
+            <button id="confirmDeleteBtn" class="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
+                <span>确认删除</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+.modal-enter { animation: modalFadeIn 0.15s ease-out; }
+@keyframes modalFadeIn { from { opacity:0; transform:scale(0.95); } to { opacity:1; transform:scale(1); } }
+#deleteModal > div { animation: modalFadeIn 0.15s ease-out; }
+</style>
+
+<script>
+let currentFilter = '';
+let pendingDeleteId = null;
+
+document.querySelectorAll('#filter-bar button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#filter-bar button').forEach(b => {
+            b.className = 'px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200';
+        });
+        btn.className = 'px-4 py-2 rounded-full text-sm font-medium bg-primary-600 text-white';
+        currentFilter = btn.dataset.filter;
+        loadApps();
+    });
+});
+
+function showDeleteModal(appId) {
+    pendingDeleteId = appId;
+    document.getElementById('deleteModal').classList.remove('hidden');
+}
+
+function closeDeleteModal(e) {
+    if (e && e.target !== e.currentTarget && e.target.closest('#deleteModal > div')) return;
+    document.getElementById('deleteModal').classList.add('hidden');
+    pendingDeleteId = null;
+}
+
+document.getElementById('confirmDeleteBtn').addEventListener('click', async function() {
+    if (!pendingDeleteId) return;
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 删除中...';
+    try {
+        await apiDel("/api/applications/" + pendingDeleteId);
+        showToast("已删除");
+        closeDeleteModal();
+        loadApps();
+    } catch(err) {
+        showToast(err.message, "error");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>确认删除</span>';
+        pendingDeleteId = null;
+    }
+});
+
+async function loadApps() {
+    const list = document.getElementById('app-list');
+    list.innerHTML = '<div class="card text-center text-gray-400 py-8">加载中...</div>';
+    try {
+        let url = '/api/applications';
+        if (currentFilter) {
+            if (currentFilter === 'rejected') {
+                url += '?status=dept_rejected';
+            } else {
+                url += '?status=' + currentFilter;
+            }
+        }
+        let data = await api(url);
+        let apps = data.applications;
+
+        if (currentFilter === 'rejected') {
+            const data2 = await api('/api/applications?status=studio_rejected');
+            apps = [...apps, ...data2.applications];
+        }
+
+        if (apps.length === 0) {
+            list.innerHTML = '<div class="card text-center text-gray-400 py-8">暂无申请记录</div>';
+            return;
+        }
+
+        let html = '';
+        for (const a of apps) {
+            const canRemind = ['pending','dept_approved','studio_approved'].includes(a.status);
+            html += `<div class="card hover:shadow-md transition-shadow">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <a href="/applications/${a.id}" class="flex-1 min-w-0">
+                        <div class="flex items-center gap-3 mb-2">
+                            <h3 class="font-semibold text-gray-800 truncate">${a.meeting_topic}</h3>
+                            ${statusBadge(a.status)}
+                        </div>
+                        <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-500">
+                            <span><i class="fa-solid fa-user mr-1"></i>${a.on_site_contact || "-"}</span><span><i class="fa-solid fa-tag mr-1"></i>${a.meeting_type_name}</span>
+                            <span><i class="fa-regular fa-clock mr-1"></i>${formatTime(a.start_time)} ~ ${formatTime(a.end_time)}</span>
+                            ${a.executor_name ? `<span><i class="fa-solid fa-user-check mr-1"></i>${a.executor_name}</span>` : ''}
+                        </div>
+                    </a>
+                    ${canRemind ? `<button type="button" onclick="remind(event, ${a.id}, '${a.status}')" class="btn-outline text-sm whitespace-nowrap">
+                        <i class="fa-solid fa-bell mr-1"></i>催办
+                    </button>` : ''}
+                    ${USER.roles && USER.roles.includes("admin") ? `<button type="button" onclick="showDeleteModal(${a.id})" class="btn-danger text-sm whitespace-nowrap ml-2">
+                        <i class="fa-solid fa-trash mr-1"></i>删除
+                    </button>` : ''}
+                </div>
+            </div>`;
+        }
+        list.innerHTML = html;
+    } catch(e) {
+        list.innerHTML = `<div class="card text-center text-red-400 py-8">加载失败: ${e.message}</div>`;
+    }
+}
+
+async function remind(e, appId, status) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    if (typeof api === "undefined") { showToast("API未加载，请刷新页面重试", "error"); return; }
+    const stageMap = { pending: 'dept', dept_approved: 'studio', studio_approved: 'assign' };
+    const stageLabels = { dept: '部门主管', studio: '演播厅主管', assign: '演播厅主管(分配)' };
+    const stage = stageMap[status];
+    if (!stage) return;
+    const msg = prompt(`催办提醒给 ${stageLabels[stage]}（可选留言）：`);
+    if (msg === null) return;
+    try {
+        await api(`/api/reminders/${appId}`, {
+            method: 'POST',
+            body: JSON.stringify({ target_stage: stage, message: msg || '' }),
+        });
+        showToast('催办已发送');
+    } catch(e) {
+        showToast(e.message, 'error');
+    }
+}
+
+loadApps();
+</script>
+{% endblock %}

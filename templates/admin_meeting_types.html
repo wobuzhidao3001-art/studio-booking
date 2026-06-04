@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold text-gray-800 mb-6">会议类型管理</h2>
+<div class="flex gap-3 mb-6"><input id="new-type-name" class="input max-w-xs" placeholder="输入新类型名称"><button onclick="addType()" class="btn-primary whitespace-nowrap"><i class="fa-solid fa-plus mr-1"></i>添加</button></div>
+<div class="card"><div id="type-list" class="divide-y"><div class="py-4 text-center text-gray-400">加载中...</div></div></div>
+<script>
+async function loadTypes() { try { var data = await api("/api/meeting-types/all"); var list = document.getElementById("type-list"); var html = ""; data.types.forEach(function(t){html += '<div class="flex items-center justify-between py-3"><div class="flex items-center gap-3"><span class="font-medium text-gray-800">'+t.name+'</span>'+(t.is_active?'<span class="badge badge-approved">启用</span>':'<span class="badge badge-rejected">禁用</span>')+'</div><div class="flex gap-2"><button onclick="editType('+t.id+',\''+t.name+'\')" class="text-primary-600 hover:text-primary-800 text-sm">编辑</button><button onclick="toggleType('+t.id+','+t.is_active+')" class="'+(t.is_active?'text-red-500':'text-green-500')+' hover:opacity-80 text-sm">'+(t.is_active?'禁用':'启用')+'</button><button onclick="deleteType('+t.id+')" class="text-red-500 hover:text-red-700 text-sm"><i class="fa-solid fa-trash"></i></button></div></div>'}); list.innerHTML = html } catch(e) { document.getElementById("type-list").innerHTML = '<div class="py-4 text-center text-red-400">'+e.message+'</div>' } }
+async function addType() { var n=document.getElementById("new-type-name").value.trim(); if(!n) return; try { await api("/api/meeting-types",{method:"POST",body:JSON.stringify({name:n})}); document.getElementById("new-type-name").value=""; showToast("已添加"); loadTypes() } catch(e){showToast(e.message,"error")} }
+async function editType(id,old) { var n=prompt("修改名称：",old); if(!n||n===old) return; try { await api("/api/meeting-types/"+id,{method:"PUT",body:JSON.stringify({name:n})}); showToast("已更新"); loadTypes() } catch(e){showToast(e.message,"error")} }
+async function toggleType(id,cur) { try { await api("/api/meeting-types/"+id,{method:"PUT",body:JSON.stringify({is_active:cur?0:1})}); showToast(cur?"已禁用":"已启用"); loadTypes() } catch(e){showToast(e.message,"error")} }
+async function deleteType(id) { if(!confirm("确认删除？")) return; try { await apiDel("/api/meeting-types/"+id); showToast("已删除"); loadTypes() } catch(e){showToast(e.message,"error")} }
+loadTypes();
+</script>
+{% endblock %}

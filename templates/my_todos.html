@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold text-gray-800 mb-2">我的待办</h2>
+<p class="text-gray-500 mb-6">根据您的角色显示待处理事项</p>
+<div id="reminder-bar" class="hidden mb-4"></div>
+<div id="todos-container"><div class="card text-center text-gray-400 py-8">加载中...</div></div>
+
+<script>
+var roles = USER.roles || [];
+var isDeptSup = roles.indexOf("dept_supervisor") >= 0;
+var isStudioMgr = roles.indexOf("studio_manager") >= 0;
+var isExecutor = roles.indexOf("executor") >= 0;
+
+async function loadTodos() {
+    var container = document.getElementById("todos-container");
+    var html = "";
+    if (isDeptSup) {
+        try {
+            var data = await api("/api/applications?status=pending");
+            var apps = data.applications.filter(function(a){return a.department === USER.department});
+            html += '<h3 class="text-lg font-semibold text-gray-700 mb-3">待部门审批 (' + apps.length + ')</h3>';
+            if (apps.length === 0) html += '<div class="card text-center text-gray-400 py-4 mb-6">暂无</div>';
+            else { html += '<div class="space-y-3 mb-8">'; apps.forEach(function(a){html += '<div class="card hover:shadow-md"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><a href="/applications/'+a.id+'" class="flex-1"><h3 class="font-semibold text-gray-800">'+a.meeting_topic+'</h3><p class="text-sm text-gray-500">'+a.applicant_name+' · '+a.department+(a.on_site_contact?' · '+a.on_site_contact:'')+' · '+formatTime(a.start_time)+' ~ '+formatTime(a.end_time)+'</p></a><div class="flex gap-2"><button onclick="approveAction(event,'+a.id+',\'dept\',\'approve\')" class="btn-success text-sm"><i class="fa-solid fa-check mr-1"></i>通过</button><button onclick="approveAction(event,'+a.id+',\'dept\',\'reject\')" class="btn-danger text-sm"><i class="fa-solid fa-xmark mr-1"></i>驳回</button></div></div></div>'; }); html += '</div>'; }
+        } catch(e) {}
+    }
+    if (isStudioMgr) {
+        try {
+            var data = await api("/api/applications?status=dept_approved");
+            var apps = data.applications;
+            html += '<h3 class="text-lg font-semibold text-gray-700 mb-3">待终审并分配 (' + apps.length + ')</h3>';
+            if (apps.length === 0) html += '<div class="card text-center text-gray-400 py-4 mb-6">暂无</div>';
+            else { html += '<div class="space-y-3 mb-8">'; apps.forEach(function(a){html += '<div class="card hover:shadow-md"><div class="flex flex-col gap-3"><a href="/applications/'+a.id+'" class="flex-1"><h3 class="font-semibold text-gray-800">'+a.meeting_topic+'</h3><p class="text-sm text-gray-500">'+a.applicant_name+' · '+a.department+(a.on_site_contact?' · '+a.on_site_contact:'')+' · '+formatTime(a.start_time)+' ~ '+formatTime(a.end_time)+'</p></a><div class="flex flex-col sm:flex-row gap-2 items-start sm:items-center"><select id="exec-sel-'+a.id+'" class="input text-sm w-full sm:w-auto"><option value="">选择执行管理员...</option></select><button onclick="studioApprove(event,'+a.id+')" class="btn-success text-sm whitespace-nowrap"><i class="fa-solid fa-check mr-1"></i>通过并分配</button><button onclick="approveAction(event,'+a.id+',\'studio\',\'reject\')" class="btn-danger text-sm whitespace-nowrap"><i class="fa-solid fa-xmark mr-1"></i>驳回</button></div></div></div>'; }); html += '</div>'; }
+        } catch(e) {}
+    }
+    if (isExecutor) {
+        try { var data = await api("/api/applications?status=assigned"); var mine = data.applications.filter(function(a){return a.assigned_executor_id===USER.id}); html += '<h3 class="text-lg font-semibold text-gray-700 mb-3">待办理使用 ('+mine.length+')</h3>'; if(mine.length===0) html += '<div class="card text-center text-gray-400 py-4 mb-6">暂无</div>'; else { html += '<div class="space-y-3 mb-8">'; mine.forEach(function(a){html += '<div class="card hover:shadow-md"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><a href="/applications/'+a.id+'" class="flex-1"><h3 class="font-semibold text-gray-800">'+a.meeting_topic+'</h3><p class="text-sm text-gray-500">'+a.applicant_name+(a.on_site_contact?' · '+a.on_site_contact:'')+' · '+formatTime(a.start_time)+' ~ '+formatTime(a.end_time)+'</p></a><button onclick="completeUsage(event,'+a.id+')" class="btn-success text-sm whitespace-nowrap"><i class="fa-solid fa-check mr-1"></i>完成使用</button></div></div>'; }); html += '</div>'; } } catch(e) {}
+        try { var data = await api("/api/applications?status=completed"); var mine = data.applications.filter(function(a){return a.assigned_executor_id===USER.id}); html += '<h3 class="text-lg font-semibold text-gray-700 mb-3">待提交报告 ('+mine.length+')</h3>'; if(mine.length===0) html += '<div class="card text-center text-gray-400 py-4 mb-6">暂无</div>'; else { html += '<div class="space-y-3 mb-8">'; mine.forEach(function(a){html += '<div class="card hover:shadow-md"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div class="flex-1"><h3 class="font-semibold text-gray-800">'+a.meeting_topic+'</h3><p class="text-sm text-gray-500">'+a.applicant_name+(a.on_site_contact?' · '+a.on_site_contact:'')+' · '+formatTime(a.start_time)+'</p></div><button onclick="openReportModal('+a.id+')" class="btn-primary text-sm whitespace-nowrap"><i class="fa-solid fa-file-pen mr-1"></i>提交报告</button></div></div>'; }); html += '</div>'; } } catch(e) {}
+    }
+    if (html === "") html = '<div class="card text-center text-gray-400 py-8">暂无待办</div>';
+    container.innerHTML = html;
+    if (isStudioMgr) loadExecutors();
+    if (isDeptSup || isStudioMgr || isExecutor) {
+        try { var data = await api("/api/reminders/pending"); if(data.reminders.length>0){var bar='<div class="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-4"><p class="font-medium text-orange-800 mb-2"><i class="fa-solid fa-bell mr-2"></i>催办提醒</p>'; data.reminders.forEach(function(r){bar+='<p class="text-sm text-orange-700">'+r.applicant_name+' 催办「'+r.meeting_topic+'」'+(r.message?'：'+r.message:'')+'</p>'}); bar+='</div>'; document.getElementById("reminder-bar").innerHTML=bar; document.getElementById("reminder-bar").classList.remove("hidden"); } } catch(e) {}
+    }
+}
+
+async function loadExecutors() {
+    try { var data = await api("/api/users/executors"); document.querySelectorAll("[id^='exec-sel-']").forEach(function(sel){data.executors.forEach(function(ex){sel.innerHTML+='<option value="'+ex.id+'">'+ex.real_name+' ('+ex.department+')</option>'})}) } catch(e) {}
+}
+
+async function approveAction(e, appId, stage, action) {
+    e.preventDefault(); var c = ""; if(action==="reject"){ c = prompt("驳回理由（可选）："); if(c===null) return; }
+    var url = stage==="dept" ? "/api/approvals/"+appId+"/dept" : "/api/approvals/"+appId+"/studio";
+    try { await api(url,{method:"POST",body:JSON.stringify({action:action,comment:c})}); showToast(action==="approve"?"已通过":"已驳回"); loadTodos(); } catch(e) { showToast(e.message,"error"); }
+}
+
+async function studioApprove(e, appId) {
+    e.preventDefault(); var sel = document.getElementById("exec-sel-"+appId); if(!sel.value){showToast("请选择执行管理员","error");return}
+    var c = "";
+    try { await api("/api/approvals/"+appId+"/studio",{method:"POST",body:JSON.stringify({action:"approve",comment:c})}); await api("/api/approvals/"+appId+"/assign",{method:"POST",body:JSON.stringify({executor_id:parseInt(sel.value)})}); showToast("已通过并分配"); loadTodos(); } catch(e) { showToast(e.message,"error"); }
+}
+
+async function completeUsage(e, appId) { e.preventDefault(); if(!confirm("确认已完成使用？")) return; try { await api("/api/approvals/"+appId+"/complete",{method:"POST"}); showToast("已确认完成"); loadTodos(); } catch(e) { showToast(e.message,"error"); } }
+
+function openReportModal(appId) { var m=document.getElementById("report-modal"); if(!m){createReportModal();setTimeout(function(){openReportModal(appId)},100);return} m.dataset.appId=appId; m.classList.remove("hidden") }
+function closeReportModal() { document.getElementById("report-modal").classList.add("hidden") }
+function createReportModal() { var m=document.createElement("div"); m.id="report-modal"; m.className="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"; m.innerHTML='<div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6"><div class="flex items-center justify-between mb-4"><h3 class="text-xl font-bold text-gray-800">提交事后报告</h3><button onclick="closeReportModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button></div><form onsubmit="submitReport(event)" id="report-form"><div class="space-y-4"><div><label class="label">物品归位状态</label><textarea name="items_returned" class="input" rows="2" required></textarea></div><div><label class="label">卫生保持状态</label><textarea name="cleanliness" class="input" rows="2" required></textarea></div><div><label class="label">公物损坏</label><textarea name="damage" class="input" rows="2" placeholder="选填"></textarea></div><div><label class="label">评分 (0-10)</label><input name="score" type="number" min="0" max="10" step="0.1" class="input" required></div><div><label class="label">物品归位照片</label><input type="file" name="photos_returned" accept="image/*" multiple class="input"></div><div><label class="label">卫生保持照片</label><input type="file" name="photos_cleanliness" accept="image/*" multiple class="input"></div><div><label class="label">公物损坏照片</label><input type="file" name="photos_damage" accept="image/*" multiple class="input"></div></div><div id="report-error" class="text-red-500 text-sm mt-3 hidden"></div><button type="submit" class="btn-primary w-full mt-4">提交报告</button></form></div>'; document.body.appendChild(m) }
+async function submitReport(e) { e.preventDefault(); var appId=document.getElementById("report-modal").dataset.appId; var errEl=document.getElementById("report-error"); errEl.classList.add("hidden"); var fd=new FormData(document.getElementById("report-form")); try { await apiForm("/api/reports/"+appId+"/submit",fd); showToast("报告提交成功！"); closeReportModal(); loadTodos(); } catch(e) { errEl.textContent = (e && e.message) ? e.message : String(e); errEl.classList.remove("hidden"); } }
+
+loadTodos();
+</script>
+{% endblock %}

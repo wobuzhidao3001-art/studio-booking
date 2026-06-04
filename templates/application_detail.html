@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <a href="javascript:history.back()" class="text-primary-600 hover:text-primary-800 mb-4 inline-flex items-center gap-1">
+        <i class="fa-solid fa-arrow-left"></i> 返回
+    </a>
+
+    <div id="detail-content">
+        <div class="card text-center text-gray-400 py-8">加载中...</div>
+    </div>
+</div>
+
+<script>
+const APP_ID = {{ app_id }};
+
+
+async function buildAdminPanel(app) {
+    let supervisors = [], executors = [];
+    try {
+        const ds = await api("/api/users/dept_supervisors");
+        supervisors = ds.supervisors;
+        const de = await api("/api/users/executors");
+        executors = de.executors;
+    } catch(e) {}
+
+    let h = '<div class="card mb-6 border-2 border-orange-300 bg-orange-50"><h3 class="text-lg font-bold text-orange-700 mb-3"><i class="fa-solid fa-shield-halved mr-2"></i>管理员操作：转移审批节点</h3>';
+    h += '<p class="text-sm text-orange-600 mb-3">当前状态：<b>' + (STATUS_MAP[app.status] ? STATUS_MAP[app.status].label : app.status) + '</b></p>';
+
+    if (app.status === 'pending') {
+        h += '<div class="mb-3"><label class="label text-xs">转移给部门主管审批</label><select id="adm-target" class="input text-sm"><option value="">请选择</option>';
+        supervisors.forEach(function(s){
+            h += '<option value="dept:' + s.id + ':' + s.department + '">' + s.real_name + ' (' + s.department + ')</option>';
+        });
+        h += '</select></div>';
+    } else if (app.status === 'dept_approved') {
+        h += '<p class="text-sm text-gray-600">该申请所有演播厅主管均可见，无需专门转移。</p>';
+    } else if (app.status === 'studio_approved') {
+        h += '<div class="mb-3"><label class="label text-xs">转移给执行管理员</label><select id="adm-target" class="input text-sm"><option value="">请选择</option>';
+        executors.forEach(function(e){
+            h += '<option value="exec:' + e.id + '">' + e.real_name + ' (' + e.department + ')</option>';
+        });
+        h += '</select></div>';
+    } else {
+        h += '<p class="text-sm text-gray-600">当前状态无需转移审批节点。</p>';
+    }
+
+    h += '<button onclick="doTransfer('+app.id+')" class="btn-primary mt-2 text-sm"><i class="fa-solid fa-arrow-right-arrow-left mr-1"></i>执行转移</button>';
+    h += '<span id="adm-msg" class="text-sm ml-3"></span>';
+    h += '</div>';
+    return h;
+}
+
+async function doTransfer(appId) {
+    var target = document.getElementById("adm-target");
+    var msgEl = document.getElementById("adm-msg");
+    if (!target || !target.value) {
+        if (msgEl) { msgEl.textContent = "请选择目标审批人"; msgEl.className = "text-sm ml-3 text-red-600"; }
+        return;
+    }
+    var parts = target.value.split(":");
+    var body = {};
+    if (parts[0] === "dept") {
+        // Change department to route to that supervisor
+        body.department = parts[2];
+    } else if (parts[0] === "exec") {
+        // Assign to executor
+        body.executor_id = parseInt(parts[1]);
+    }
+    try {
+        await api("/api/applications/" + appId + "/admin-transfer", {method:"PUT", body: JSON.stringify(body)});
+        if (msgEl) { msgEl.textContent = "转移成功！"; msgEl.className = "text-sm ml-3 text-green-600"; }
+        setTimeout(function(){ loadDetail(); }, 500);
+    } catch(e) {
+        if (msgEl) { msgEl.textContent = e.message; msgEl.className = "text-sm ml-3 text-red-600"; }
+    }
+}
+
+async function loadDetail() {
+    const container = document.getElementById('detail-content');
+    try {
+        const data = await api(`/api/applications/${APP_ID}`);
+        const a = data.application;
+        const approvals = data.approvals || [];
+        const reminders = data.reminders || [];
+        const report = data.report;
+        const pendingApprovers = data.pending_approvers || [];
+
+        let html = `
+        <div class="card mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-gray-800">${a.meeting_topic}</h2>
+                ${statusBadge(a.status)}
+            </div>
+            <div class="grid grid-cols-2 gap-4 text-sm">
+                <div><span class="text-gray-400">申请人</span><p class="font-medium">${a.applicant_name}</p></div>
+                <div><span class="text-gray-400">学部</span><p class="font-medium">${a.department}</p></div>
+                <div><span class="text-gray-400">联系方式</span><p class="font-medium">${a.contact}</p></div><div><span class="text-gray-400">现场负责人</span><p class="font-medium">${a.on_site_contact || "-"}</p></div>
+                <div><span class="text-gray-400">会议类型</span><p class="font-medium">${a.meeting_type_name}</p></div>
+                <div><span class="text-gray-400">开始时间</span><p class="font-medium">${formatTime(a.start_time)}</p></div>
+                <div><span class="text-gray-400">结束时间</span><p class="font-medium">${formatTime(a.end_time)}</p></div>
+                ${a.executor_name ? `<div><span class="text-gray-400">执行管理员</span><p class="font-medium">${a.executor_name}</p></div>` : ''}
+                ${a.remarks ? `<div class="col-span-2"><span class="text-gray-400">备注</span><p class="font-medium">${a.remarks}</p></div>` : ''}
+            </div>
+        </div>`;
+
+        // Timeline
+        html += '<div class="card mb-6"><h3 class="text-lg font-semibold text-gray-700 mb-4">📅 审批时间线</h3><div class="space-y-0">';
+        const nodes = buildTimeline(a, approvals, reminders, pendingApprovers);
+        nodes.forEach((n, i) => {
+            const isLast = i === nodes.length - 1;
+            html += `<div class="flex gap-4">
+                <div class="flex flex-col items-center">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm ${n.iconBg}">${n.icon}</div>
+                    ${isLast ? '' : '<div class="w-0.5 flex-1 bg-gray-200 my-1"></div>'}
+                </div>
+                <div class="pb-6 flex-1">
+                    <p class="font-medium text-gray-800">${n.title}</p>
+                    <p class="text-sm text-gray-500">${n.desc}</p>
+                    ${n.comment ? `<p class="text-sm text-gray-400 mt-1">💬 ${n.comment}</p>` : ''}
+                    ${n.reminder ? `<p class="text-sm text-orange-500 mt-1">📢 催办${n.reminder.message ? '：' + n.reminder.message : ''}</p>` : ''}
+                </div>
+            </div>`;
+        });
+        html += '</div></div>';
+
+        // Report
+        if (report) {
+            html += `<div class="card mb-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">📝 事后报告</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <p class="font-medium text-sm text-gray-600">物品归位</p><p class="text-sm mt-1">${report.items_returned}</p>
+                        ${renderPhotos(report.photos, 'returned')}
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <p class="font-medium text-sm text-gray-600">卫生保持</p><p class="text-sm mt-1">${report.cleanliness}</p>
+                        ${renderPhotos(report.photos, 'cleanliness')}
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <p class="font-medium text-sm text-gray-600">公物损坏</p><p class="text-sm mt-1">${report.damage || '无'}</p>
+                        ${renderPhotos(report.photos, 'damage')}
+                    </div>
+                </div>
+                <div class="mt-4 text-center">
+                    <span class="text-3xl font-bold ${report.score >= 8 ? 'text-green-600' : report.score >= 6 ? 'text-yellow-600' : 'text-red-600'}">${report.score}</span>
+                    <span class="text-gray-400 ml-1">/ 10 分</span>
+                </div>
+            </div>`;
+        }
+
+        // Admin transfer panel
+        if (USER.roles && USER.roles.includes("admin")) {
+            html += await buildAdminPanel(a);
+        }
+        container.innerHTML = html;
+    } catch(e) {
+        container.innerHTML = `<div class="card text-center text-red-400 py-8">加载失败: ${e.message}</div>`;
+    }
+}
+
+function renderPhotos(photos, cat) {
+    const catPhotos = (photos || []).filter(p => p.category === cat);
+    if (catPhotos.length === 0) return '';
+    let h = '<div class="flex gap-1 mt-2 flex-wrap">';
+    catPhotos.forEach(p => {
+        h += `<img src="/${p.file_path}" class="w-12 h-12 object-cover rounded cursor-pointer" onclick="openLightbox('/${p.file_path}')">`;
+    });
+    h += '</div>';
+    return h;
+}
+
+function buildTimeline(app, approvals, reminders, pendingApprovers) {
+    const nodes = [];
+    const now = new Date().toISOString();
+
+    // 1. Submit
+    nodes.push({
+        icon: '📝', iconBg: 'bg-blue-100', title: '提交申请',
+        desc: `${app.applicant_name} · ${app.department}${app.contact ? ' · ' + app.contact : ''}${app.created_at ? ' · ' + formatTime(app.created_at) : ''}`,
+    });
+
+    // Reminders at dept stage
+    const deptReminders = reminders.filter(r => r.target_stage === 'dept');
+
+    // 2. Dept approval
+    const deptApproval = approvals.find(r => r.stage === 'dept');
+    if (deptApproval) {
+        const approved = deptApproval.action === 'approve';
+        nodes.push({
+            icon: approved ? '✅' : '❌', iconBg: approved ? 'bg-green-100' : 'bg-red-100',
+            title: `${deptApproval.approver_name || '部门主管'}${approved ? ' 通过' : ' 驳回'}`,
+            desc: (deptApproval.approver_dept ? deptApproval.approver_dept + ' · ' : '') + (deptApproval.approver_phone ? deptApproval.approver_phone + ' · ' : '') + formatTime(deptApproval.created_at),
+            comment: deptApproval.comment,
+            reminder: deptReminders[0],
+        });
+    } else if (app.status === 'pending') {
+        var deptNames = pendingApprovers.map(function(p){ return p.real_name + ' (' + p.department + (p.phone ? ' ' + p.phone : '') + ')' }).join('、') || '暂无审批人';
+        nodes.push({
+            icon: '⏳', iconBg: 'bg-yellow-100', title: '等待部门主管审批',
+            desc: deptNames,
+            reminder: deptReminders[0],
+        });
+    }
+
+    // 3. Studio approval
+    const studioReminders = reminders.filter(r => r.target_stage === 'studio');
+    const studioApproval = approvals.find(r => r.stage === 'studio');
+    if (studioApproval) {
+        const approved = studioApproval.action === 'approve';
+        nodes.push({
+            icon: approved ? '✅' : '❌', iconBg: approved ? 'bg-green-100' : 'bg-red-100',
+            title: `${studioApproval.approver_name || '演播厅主管'}${approved ? ' 通过' : '驳回'}`,
+            desc: (studioApproval.approver_dept ? studioApproval.approver_dept + ' · ' : '') + (studioApproval.approver_phone ? studioApproval.approver_phone + ' · ' : '') + formatTime(studioApproval.created_at),
+            comment: studioApproval.comment,
+            reminder: studioReminders[0],
+        });
+    } else if (['dept_approved'].includes(app.status)) {
+        var studioNames = pendingApprovers.map(function(p){ return p.real_name + ' (' + p.department + (p.phone ? ' ' + p.phone : '') + ')' }).join('、') || '暂无审批人';
+        nodes.push({
+            icon: '⏳', iconBg: 'bg-yellow-100', title: '等待演播厅主管终审',
+            desc: studioNames,
+            reminder: studioReminders[0],
+        });
+    }
+
+    // 4. Assign
+    if (app.status === 'assigned' || app.status === 'completed' || app.status === 'reported') {
+        nodes.push({
+            icon: '👤', iconBg: 'bg-indigo-100', title: `已分配：${app.executor_name || ''}`,
+            desc: app.status === 'assigned' ? '等待办理' : (app.executor_name ? '办结后提交报告' : ''),
+            reminder: reminders.find(r => r.target_stage === 'assign'),
+        });
+    } else if (app.status === 'studio_approved') {
+        var execNames = pendingApprovers.map(function(p){ return p.real_name + ' (' + p.department + (p.phone ? ' ' + p.phone : '') + ')' }).join('、') || '暂无执行人';
+        nodes.push({
+            icon: '⏳', iconBg: 'bg-yellow-100', title: '等待分配执行管理员',
+            desc: execNames,
+        });
+    }
+
+    // 5. Complete / Report
+    if (['completed','reported'].includes(app.status)) {
+        nodes.push({
+            icon: app.status === 'reported' ? '✅' : '🏃', 
+            iconBg: app.status === 'reported' ? 'bg-green-100' : 'bg-blue-100',
+            title: app.status === 'reported' ? '已完成（含报告）' : '已办理，待提交报告',
+            desc: '',
+        });
+    }
+
+    return nodes;
+}
+
+function openLightbox(src) {
+    let lb = document.getElementById('lightbox');
+    if (!lb) {
+        lb = document.createElement('div');
+        lb.id = 'lightbox';
+        lb.className = 'fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4';
+        lb.onclick = function() { lb.classList.add('hidden'); };
+        lb.innerHTML = '<button class="absolute top-4 right-4 text-white text-3xl">&times;</button><img id="lightbox-img" class="max-w-full max-h-[90vh] rounded-lg object-contain" src="">';
+        document.body.appendChild(lb);
+    }
+    document.getElementById('lightbox-img').src = src;
+    lb.classList.remove('hidden');
+}
+
+loadDetail();
+</script>
+{% endblock %}

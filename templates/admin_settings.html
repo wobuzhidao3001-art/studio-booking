@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold text-gray-800 mb-6">系统设置</h2>
+<div class="card max-w-xl">
+    <div class="mb-6">
+        <label class="label" for="unit-name">单位名称</label>
+        <p class="text-xs text-gray-500 mb-2">设置显示在系统标题前的单位名称</p>
+        <div class="flex gap-3 items-center">
+            <input id="unit-name" type="text" class="input max-w-[280px]" placeholder="例如：济南某某">
+            <button onclick="saveUnitName()" class="btn-primary whitespace-nowrap"><i class="fa-solid fa-save mr-1"></i>保存</button>
+        </div>
+        <p id="unit-status" class="text-sm mt-2 hidden"></p>
+    </div>
+
+    <hr class="my-6 border-gray-300">
+
+    <div class="mb-6">
+        <label class="label" for="max-booking-minutes">预约最长时长（分钟）</label>
+        <p class="text-xs text-gray-500 mb-2">设置用户每次预约可选择的最长时间（以30分钟为步长，范围30-480分钟）</p>
+        <div class="flex gap-3 items-center">
+            <input id="max-booking-minutes" type="number" class="input max-w-[160px]" min="30" max="480" step="30">
+            <button onclick="saveConfig()" class="btn-primary whitespace-nowrap"><i class="fa-solid fa-save mr-1"></i>保存</button>
+        </div>
+        <p id="config-status" class="text-sm mt-2 hidden"></p>
+    </div>
+
+    <div class="text-sm text-gray-500">
+        <p><i class="fa-solid fa-info-circle mr-1"></i> 配置说明：</p>
+        <ul class="list-disc ml-5 mt-1 space-y-1">
+            <li>单位名称默认为空，设置后将显示在所有页面的标题中</li>
+            <li>默认值为180分钟（3小时）</li>
+            <li>最小30分钟，最大480分钟（8小时）</li>
+            <li>系统会自动按30分钟取整</li>
+            <li>修改后即刻生效，影响所有用户的新申请</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+async function loadConfig() {
+    try {
+        var data = await api("/api/config");
+        var cfg = {};
+        data.configs.forEach(function(c) { cfg[c.key] = c.value; });
+        if (cfg.unit_name !== undefined) {
+                document.getElementById("unit-name").value = cfg.unit_name;
+            }
+            if (cfg.max_booking_minutes) {
+                document.getElementById("max-booking-minutes").value = parseInt(cfg.max_booking_minutes);
+            }
+    } catch(e) {
+        showToast("加载配置失败：" + e.message, "error");
+    }
+}
+
+async function saveUnitName() {
+    var val = document.getElementById("unit-name").value.trim();
+    if (!val) { showToast("请输入单位名称", "error"); return; }
+    try {
+        await api("/api/config", {
+            method: "PUT",
+            body: JSON.stringify({
+                key: "unit_name",
+                value: val,
+                description: "单位名称，显示在系统标题前"
+            })
+        });
+        showToast("单位名称已保存！");
+        loadConfig();
+    } catch(e) {
+        showToast("保存失败：" + e.message, "error");
+    }
+}
+
+async function saveConfig() {
+    var val = document.getElementById("max-booking-minutes").value.trim();
+    if (!val) { showToast("请输入预约时长", "error"); return; }
+    var num = parseInt(val);
+    if (isNaN(num) || num < 30 || num > 480) {
+        showToast("请输入30-480之间的数字", "error"); return;
+    }
+    try {
+        await api("/api/config", {
+            method: "PUT",
+            body: JSON.stringify({
+                key: "max_booking_minutes",
+                value: String(num),
+                description: "预约最长时长（分钟）"
+            })
+        });
+        showToast("配置已保存！");
+        loadConfig();
+    } catch(e) {
+        showToast("保存失败：" + e.message, "error");
+    }
+}
+
+loadConfig();
+</script>
+{% endblock %}

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="page-title">演播厅预约管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/static/js/app.js?v=6"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; }
+        body { background: #d1d5db; }
+        .sidebar-link { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: 0.5rem; color: #f3f4f6; font-weight: 500; transition: all 0.15s; text-decoration: none; }
+        .sidebar-link:hover { background: #4b5563; color: #fff; }
+        .sidebar-link.active { background: #2563eb; color: #fff; font-weight: 700; }
+        .tab-link { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; padding: 0.5rem 0.75rem; color: #6b7280; transition: color 0.15s; }
+        .tab-link.active { color: #2563eb; }
+        .btn-primary { background: #2563eb; color: #fff; padding: 0.5rem 1.25rem; border-radius: 0.5rem; font-weight: 600; transition: background 0.15s; display: inline-flex; align-items: center; gap: 0.375rem; border: none; cursor: pointer; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-danger { background: #dc2626; color: #fff; padding: 0.5rem 1.25rem; border-radius: 0.5rem; font-weight: 600; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.375rem; }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-success { background: #16a34a; color: #fff; padding: 0.5rem 1.25rem; border-radius: 0.5rem; font-weight: 600; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.375rem; }
+        .btn-success:hover { background: #15803d; }
+        .btn-outline { border: 2px solid #6b7280; color: #1f2937; padding: 0.5rem 1.25rem; border-radius: 0.5rem; font-weight: 600; background: #fff; transition: all 0.15s; cursor: pointer; display: inline-flex; align-items: center; gap: 0.375rem; }
+        .btn-outline:hover { background: #f3f4f6; border-color: #4b5563; }
+        .card { background: #fff; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.15); border: 1.5px solid #9ca3af; padding: 1.5rem; }
+        .input { width: 100%; border: 2px solid #9ca3af; border-radius: 0.5rem; padding: 0.625rem 1rem; background: #fff; color: #111827; font-size: 0.9375rem; outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
+        .input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.25); }
+        .input::placeholder { color: #9ca3af; }
+        .label { display: block; font-size: 0.875rem; font-weight: 700; color: #1f2937; margin-bottom: 0.375rem; }
+        .badge { display: inline-flex; align-items: center; padding: 0.125rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; }
+        .badge-pending { background: #fef3c7; color: #92400e; }
+        .badge-approved { background: #dcfce7; color: #166534; }
+        .badge-rejected { background: #fee2e2; color: #991b1b; }
+        .badge-info { background: #dbeafe; color: #1e40af; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <aside class="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 z-30" style="background:#1e293b;">
+        <div class="flex items-center h-16 px-6" style="border-bottom:2px solid #334155;">
+            <i class="fa-solid fa-building-columns text-blue-400 text-xl"></i>
+            <span class="ml-3 text-white font-bold text-lg" id="sidebar-title"><span id="sidebar-unit"></span>演播厅管理</span>
+        </div>
+        <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <a href="/dashboard" class="sidebar-link" data-nav="dashboard"><i class="fa-solid fa-gauge-high w-5 text-center"></i>首页</a>
+            <a href="/apply" class="sidebar-link" data-nav="apply"><i class="fa-solid fa-plus-circle w-5 text-center"></i>提交申请</a>
+            <a href="/my-applications" class="sidebar-link" data-nav="my-applications"><i class="fa-solid fa-list-check w-5 text-center"></i>我的申请</a>
+            <a href="/my-todos" class="sidebar-link" data-nav="my-todos"><i class="fa-solid fa-clipboard-list w-5 text-center"></i>我的待办</a>
+            <a href="/public-board" class="sidebar-link" data-nav="public-board"><i class="fa-solid fa-bullhorn w-5 text-center"></i>公示栏</a>
+            <div id="admin-links" class="hidden">
+                <hr class="my-3" style="border-color:#334155;">
+                <a href="/admin/users" class="sidebar-link" data-nav="admin-users"><i class="fa-solid fa-users-gear w-5 text-center"></i>用户管理</a>
+                <a href="/admin/departments" class="sidebar-link" data-nav="admin-departments"><i class="fa-solid fa-school w-5 text-center"></i>学部管理</a>
+                <a href="/admin/meeting-types" class="sidebar-link" data-nav="admin-types"><i class="fa-solid fa-tags w-5 text-center"></i>会议类型</a>
+                <a href="/admin/reports" class="sidebar-link" data-nav="admin-reports"><i class="fa-solid fa-file-export w-5 text-center"></i>历史导出</a>
+                <a href="/admin/settings" class="sidebar-link" data-nav="admin-settings"><i class="fa-solid fa-gear w-5 text-center"></i>系统设置</a>
+            </div>
+        </nav>
+        <div class="px-3 py-4" style="border-top:2px solid #334155;">
+            <div class="flex items-center gap-3 px-3">
+                <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold" id="avatar-letter"></div>
+                <div>
+                    <p class="text-sm text-white font-semibold" id="sidebar-name"></p>
+                    <p class="text-xs" style="color:#94a3b8;" id="sidebar-role"></p>
+                </div>
+            </div>
+            <button onclick="logout()" class="mt-3 w-full text-left sidebar-link" style="color:#fca5a5;">
+                <i class="fa-solid fa-right-from-bracket w-5 text-center"></i>退出登录
+            </button>
+        </div>
+    </aside>
+
+    <main class="lg:pl-64 pb-20 lg:pb-0">
+        <header class="sticky top-0 z-20 bg-white lg:px-8 px-4 h-16 flex items-center justify-between shadow" style="border-bottom:2px solid #d1d5db;">
+            <h1 class="text-lg font-bold text-gray-900 lg:hidden" id="mobile-title"><span id="mobile-unit"></span>演播厅管理</h1>
+            <div class="hidden lg:block"></div>
+            <button onclick="logout()" class="lg:hidden text-gray-700 hover:text-red-600 font-semibold"><i class="fa-solid fa-right-from-bracket text-lg"></i></button>
+        </header>
+        <div class="p-4 lg:p-8">
+            {% block content %}{% endblock %}
+        </div>
+        <div class="text-center text-gray-400 text-xs pb-4 lg:pb-6 select-none">
+            版权所有 by Jinan 500001
+        </div>
+    </main>
+
+    <nav class="lg:hidden fixed bottom-0 inset-x-0 bg-white z-30 flex justify-around py-2" style="border-top:2px solid #d1d5db; box-shadow:0 -2px 6px rgba(0,0,0,0.12);">
+        <a href="/dashboard" class="tab-link" data-tab="dashboard"><i class="fa-solid fa-gauge-high text-lg"></i><span class="text-xs font-semibold">首页</span></a>
+        <a href="/apply" class="tab-link" data-tab="apply"><i class="fa-solid fa-plus-circle text-lg"></i><span class="text-xs font-semibold">申请</span></a>
+        <a href="/my-applications" class="tab-link" data-tab="my-applications"><i class="fa-solid fa-list-check text-lg"></i><span class="text-xs font-semibold">申请</span></a>
+        <a href="/my-todos" class="tab-link" data-tab="my-todos"><i class="fa-solid fa-clipboard-list text-lg"></i><span class="text-xs font-semibold">待办</span></a>
+        <a href="/public-board" class="tab-link" data-tab="public-board"><i class="fa-solid fa-bullhorn text-lg"></i><span class="text-xs font-semibold">公示</span></a>
+    </nav>
+
+    <!-- Shared JS: loaded BEFORE content scripts via DOMContentLoaded pattern, but defined here for global access -->
+    <script src="/static/js/app.js?v=6"></script>
+
+<script>
+(async function(){
+    try {
+        var cfg = await api("/api/config/public");
+        if (cfg.unit_name) {
+            var su = document.getElementById("sidebar-unit");
+            if (su) su.textContent = cfg.unit_name + " ";
+            var mu = document.getElementById("mobile-unit");
+            if (mu) mu.textContent = cfg.unit_name + " ";
+            var pt = document.getElementById("page-title");
+            if (pt) pt.textContent = cfg.unit_name + " - 演播厅预约管理系统";
+        }
+    } catch(e) {}
+})();
+</script>
+
+</body>
+</html>

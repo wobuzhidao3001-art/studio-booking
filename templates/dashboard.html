@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold text-gray-800 mb-1">工作台</h2>
+<p class="text-sm text-gray-400 mb-5">演播厅预约日历 <span style="background:#5e5ce6;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:4px;">v14</span></p>
+
+<div class="grid grid-cols-3 gap-3 mb-5">
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
+        <div class="text-2xl font-extrabold" style="color:#007aff" id="stat-today">-</div>
+        <div class="text-xs text-gray-400 font-medium mt-1">今日预约</div>
+    </div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
+        <div class="text-2xl font-extrabold" style="color:#5e5ce6" id="stat-week">-</div>
+        <div class="text-xs text-gray-400 font-medium mt-1">本周总计</div>
+    </div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
+        <div class="text-2xl font-extrabold" style="color:#30d158" id="stat-done">-</div>
+        <div class="text-xs text-gray-400 font-medium mt-1">已完成</div>
+    </div>
+</div>
+
+<div class="flex items-center gap-4 mb-4 flex-wrap">
+    <div class="flex gap-3 text-xs font-medium text-gray-500">
+        <span><span class="inline-block w-3 h-3 rounded-sm mr-1 align-middle" style="background:linear-gradient(180deg,#007aff,#0055cc)"></span>已预约</span>
+        <span><span class="inline-block w-3 h-3 rounded-sm mr-1 align-middle" style="background:linear-gradient(180deg,#30d158,#20a040)"></span>已完成</span>
+    </div>
+    <div class="flex gap-0.5 bg-gray-100 rounded-lg p-0.5 ml-auto">
+        <button onclick="switchView('bar')" id="btn-bar" class="px-4 py-1.5 rounded-md text-xs font-medium bg-white text-gray-800 shadow-sm">色块条</button>
+        <button onclick="switchView('timeline')" id="btn-tl" class="px-4 py-1.5 rounded-md text-xs font-medium text-gray-500">时间线</button>
+    </div>
+</div>
+
+<div id="bar-view">
+    <div id="day-cards" class="space-y-3"><div class="text-center text-gray-400 py-8">加载中...</div></div>
+</div>
+
+<div id="timeline-view" class="hidden">
+    <div id="tl-wrap" class="space-y-4"><div class="text-center text-gray-400 py-8">—</div></div>
+</div>
+
+<div style="margin-top:28px;">
+    <div style="font-size:15px;font-weight:700;color:#1d1d1f;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:10px;background:linear-gradient(135deg,#5e5ce6,#7c7aff);color:#fff;font-size:13px;box-shadow:0 2px 6px rgba(94,92,230,0.15);"><i class="fa-solid fa-bullhorn"></i></span>
+        公示栏
+    </div>
+    <div id="board-preview"><div class="text-center text-gray-400 py-5 text-sm">加载中...</div></div>
+</div>
+
+<div style="margin-top:24px;">
+    <div style="font-size:15px;font-weight:700;color:#1d1d1f;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:10px;background:linear-gradient(135deg,#007aff,#3395ff);color:#fff;font-size:13px;box-shadow:0 2px 6px rgba(0,122,255,0.15);"><i class="fa-solid fa-list-check"></i></span>
+        最近申请
+    </div>
+    <div id="recent-list"><div class="text-center text-gray-400 py-5 text-sm">加载中...</div></div>
+</div>
+
+<style>
+.day-card { background:#fff; border-radius:16px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.04); transition:all 0.2s; }
+.day-card.today { box-shadow:0 0 0 2px rgba(94,92,230,0.12), 0 2px 8px rgba(94,92,230,0.08); border:1.5px solid #c7c4ff; }
+.day-card:hover { box-shadow:0 2px 12px rgba(0,0,0,0.06); }
+.day-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.day-header .day-name { font-size:14px; font-weight:600; display:flex; align-items:center; gap:6px; }
+.day-header .day-count { font-size:12px; color:#8e8e93; font-weight:500; }
+.day-bar { position:relative; height:28px; background:#f2f2f7; border-radius:8px; overflow:hidden; display:flex; }
+.day-bar .seg { flex:1; height:100%; border-right:1px solid rgba(0,0,0,0.04); position:relative; transition:all 0.12s; }
+.day-bar .seg:last-child { border-right:none; }
+.day-bar .seg.booked { background:linear-gradient(180deg,#007aff,#0055cc); }
+.day-bar .seg.completed { background:linear-gradient(180deg,#30d158,#20a040); }
+.day-bar .seg:hover { filter:brightness(1.15); transform:scaleY(1.08); z-index:2; }
+.seg .popup { display:none; position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%); background:#1d1d1f; border-radius:10px; padding:8px 12px; min-width:140px; z-index:20; box-shadow:0 4px 16px rgba(0,0,0,0.2); white-space:nowrap; }
+.seg:hover .popup { display:block; }
+.popup .p-name { font-size:12px; font-weight:600; color:#fff; }
+.popup .p-time { font-size:10px; color:#8e8e93; margin-top:2px; }
+.popup .p-status { font-size:9px; padding:1px 6px; border-radius:4px; margin-top:3px; display:inline-block; font-weight:500; }
+.p-status.s-booked { background:#007aff30; color:#007aff; }
+.p-status.s-completed { background:#30d15830; color:#20a040; }
+.tl-item { display:flex; align-items:flex-start; gap:10px; padding:8px 12px; border-radius:10px; margin-bottom:4px; transition:all 0.12s; }
+.tl-item:hover { background:#f9fafb; }
+.tl-item .tl-dot { width:8px; height:8px; border-radius:50%; margin-top:5px; flex-shrink:0; }
+.tl-item .tl-time { font-size:11px; color:#8e8e93; min-width:90px; flex-shrink:0; }
+.tl-item .tl-name { font-size:13px; font-weight:600; color:#1d1d1f; flex:1; }
+.tl-item .tl-tag { font-size:10px; padding:1px 6px; border-radius:4px; font-weight:500; flex-shrink:0; }
+
+.t-item{display:flex;gap:3px;align-items:stretch;background:#fff;border-radius:14px;overflow:hidden;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,0.08);border:2px solid #d1d5db;transition:all 0.15s;position:relative}
+.t-item:hover{border-color:#8b5cf6;box-shadow:0 4px 16px rgba(139,92,246,0.12);transform:translateY(-2px)}
+.t-bar{width:5px;flex-shrink:0;min-height:48px}
+.t-body{flex:1;padding:10px 14px;min-width:0}
+.t-row1{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px}
+.t-name{font-size:15px;font-weight:800;color:#111827}
+.t-tag{font-size:10px;padding:2px 8px;border-radius:6px;font-weight:500;background:#f3f4f6;color:#6b7280}
+.t-date-row{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.t-date-row .t-date{font-size:13px;font-weight:700;color:#1d1d1f}
+.t-date-row .t-weekday{font-size:11px;font-weight:600;padding:1px 8px;border-radius:6px;background:#f0eeff;color:#5e5ce6}
+.t-date-row .t-weekday.today-chip{background:#5e5ce6;color:#fff}
+.t-time-row{font-size:11px;color:#9ca3af;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.mini-bar{display:flex;height:22px;border-radius:8px;overflow:hidden;margin-top:6px;gap:1px;padding:1px;background:#f3f4f6}
+.mini-bar .mb-seg{flex:1;height:100%;border-radius:3px}
+.t-time-labels{display:flex;justify-content:space-between;font-size:9px;color:#9ca3af;padding:0 2px;margin-top:2px}
+.mb-morning{background:linear-gradient(180deg,#ff9f0a,#ffb340)}
+.mb-midday{background:linear-gradient(180deg,#ff6b9d,#ff8ab5)}
+.mb-afternoon{background:linear-gradient(180deg,#007aff,#3395ff)}
+.mb-evening{background:linear-gradient(180deg,#5e5ce6,#7c7aff)}
+.mb-night{background:linear-gradient(180deg,#bf5af2,#d07cff)}
+.board-stamp{position:absolute;top:10px;right:12px;font-size:11px;font-weight:800;padding:2px 10px;border:2px solid;border-radius:6px;transform:rotate(5deg);letter-spacing:1px;pointer-events:none;z-index:2}
+</style>
+
+<script>
+var SLOTS=27, SLOT_START=7.5, WEEKDAYS=['日','一','二','三','四','五','六'];
+var calendarData=null, currentView='bar';
+
+function slotTime(i){ var h=SLOT_START+i*0.5; var ih=Math.floor(h),im=(h-ih)*60; return ih+':'+String(im).padStart(2,'0'); }
+
+function getTimeColor(hour){
+    if(hour<9) return 'morning';
+    if(hour<12) return 'morning';
+    if(hour<13) return 'midday';
+    if(hour<17) return 'afternoon';
+    if(hour<19) return 'evening';
+    return 'night';
+}
+function getTimeColorCSS(hour){
+    var map={morning:'#ff9f0a', midday:'#ff6b9d', afternoon:'#007aff', evening:'#5e5ce6', night:'#bf5af2'};
+    return map[getTimeColor(hour)]||'#6b7280';
+}
+
+function fmtDateDisplay(dateStr){
+    if(!dateStr) return '';
+    var d=new Date(dateStr.substring(0,10)+'T00:00:00');
+    var m=d.getMonth()+1, day=d.getDate(), wd=WEEKDAYS[d.getDay()];
+    return {date: m+'月'+day+'日', weekday: wd};
+}
+function isTodayDate(dateStr){
+    if(!dateStr) return false;
+    var t=new Date(); t.setHours(0,0,0,0);
+    var d=new Date(dateStr.substring(0,10)+'T00:00:00');
+    return d.getTime()===t.getTime();
+}
+
+function switchView(v){
+    currentView=v;
+    document.getElementById('bar-view').classList.toggle('hidden',v!=='bar');
+    document.getElementById('timeline-view').classList.toggle('hidden',v!=='timeline');
+    var b=document.getElementById('btn-bar'),t=document.getElementById('btn-tl');
+    b.className=v==='bar'?'px-4 py-1.5 rounded-md text-xs font-medium bg-white text-gray-800 shadow-sm':'px-4 py-1.5 rounded-md text-xs font-medium text-gray-500';
+    t.className=v==='timeline'?'px-4 py-1.5 rounded-md text-xs font-medium bg-white text-gray-800 shadow-sm':'px-4 py-1.5 rounded-md text-xs font-medium text-gray-500';
+}
+
+function fmtDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fmtTime(dt){ return dt.substring(11,16); }
+
+function renderMiniBar(startTime, endTime){
+    var st_h=parseInt(startTime.substring(11,13))+parseInt(startTime.substring(14,16))/60;
+    var et_h=parseInt(endTime.substring(11,13))+parseInt(endTime.substring(14,16))/60;
+    var ss=Math.max(0,Math.floor((st_h-SLOT_START)/0.5));
+    var es=Math.min(SLOTS,Math.ceil((et_h-SLOT_START)/0.5));
+    var h='';
+    for(var s=0;s<SLOTS;s++){
+        var cls=s>=ss&&s<es?'mb-'+getTimeColor(SLOT_START+s*0.5):'';
+        h+='<div class="mb-seg '+cls+'"></div>';
+    }
+    return h;
+}
+
+function renderCalendar(data){
+    calendarData=data;
+    document.getElementById('stat-today').textContent=data.stats.today_total;
+    document.getElementById('stat-week').textContent=data.stats.week_total;
+    document.getElementById('stat-done').textContent=data.stats.completed_total;
+    var cards=document.getElementById('day-cards');
+    if(data.days.length===0){ cards.innerHTML='<div class="text-center text-gray-400 py-8">近期无预约</div>'; }
+    else {
+        var h='';
+        data.days.forEach(function(day){
+            var d=new Date(day.date+'T00:00:00');
+            var t=day.date===data.today, m=d.getMonth()+1, dt=d.getDate(), wd=WEEKDAYS[d.getDay()];
+            // 排序预约
+            day.apps.sort(function(x,y){return x.start_slot-y.start_slot});
+            h+='<div class="day-card'+(t?' today':'')+'"><div class="day-header"><div class="day-name">'+m+'月'+dt+'日 周'+wd+(t?' <span style="font-size:10px;padding:1px 8px;border-radius:8px;background:#5e5ce615;color:#5e5ce6;">今天</span>':'')+'</div><div class="day-count">'+day.apps.length+' 个预约</div></div><div class="mini-bar" style="margin-bottom:4px;">';
+            for(var i=0;i<SLOTS;i++){
+                var app=null;
+                for(var j=0;j<day.apps.length;j++){var a=day.apps[j];if(i>=a.start_slot&&i<a.end_slot){app=a;break}}
+                h+='<div class="mb-seg '+(app?'mb-'+getTimeColor(SLOT_START+i*0.5):'')+'"></div>';
+            }
+            h+='</div><div class="t-time-labels"><span>07:30</span><span>09:00</span><span>10:30</span><span>12:00</span><span>13:30</span><span>15:00</span><span>16:30</span><span>18:00</span><span>19:30</span><span>21:00</span></div>';
+            // 预约详情列表（直接显示在色块条下方）
+            if(day.apps.length>0){
+                h+='<div style="margin-top:8px;">';
+                day.apps.forEach(function(a){
+                    var dc=a.status_class==='completed'?'#30d158':'#007aff';
+                    var stH=parseInt(a.start.substring(11,13))+parseInt(a.start.substring(14,16))/60;
+                    var barColor=getTimeColorCSS(stH);
+                    h+='<a href="/applications/'+a.id+'" style="text-decoration:none;color:inherit;">';
+                    h+='<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;margin-bottom:3px;transition:all 0.1s;">';
+                    h+='<div style="width:4px;height:48px;border-radius:3px;background:'+barColor+';flex-shrink:0"></div>';
+                    h+='<div style="flex:1;min-width:0;">';
+                    h+='<div style="font-size:13px;font-weight:600;color:#1d1d1f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+a.applicant+' · '+a.topic+'</div>';
+                    h+='<div style="font-size:11px;color:#8e8e93;margin-top:1px;">'+fmtTime(a.start)+' — '+fmtTime(a.end)+'</div>';
+                    h+='<div class="mini-bar" style="margin-top:4px;">'+renderMiniBar(a.start,a.end)+'</div><div class="t-time-labels"><span>07:30</span><span>09:00</span><span>10:30</span><span>12:00</span><span>13:30</span><span>15:00</span><span>16:30</span><span>18:00</span><span>19:30</span><span>21:00</span></div>';
+                    h+='</div>';
+                    h+='<div style="font-size:10px;padding:2px 8px;border-radius:6px;font-weight:500;background:'+dc+'20;color:'+dc+';flex-shrink:0;">'+(a.status_class==='completed'?'已完成':'已预约')+'</div>';
+                    h+='</div></a>';
+                });
+                h+='</div>';
+            }
+            h+='</div>';
+        });
+        cards.innerHTML=h;
+    }
+    var tlw=document.getElementById('tl-wrap'),tlh='';
+    data.days.forEach(function(day){
+        var d=new Date(day.date+'T00:00:00'),t=day.date===data.today,m=d.getMonth()+1,dt=d.getDate(),wd=WEEKDAYS[d.getDay()];
+        tlh+='<div class="bg-white rounded-2xl p-4 shadow-sm border '+(t?'border-purple-200':'border-gray-100')+'"><div class="font-semibold text-sm text-gray-700 mb-3">'+m+'月'+dt+'日 周'+wd+(t?' <span style="font-size:10px;padding:1px 8px;border-radius:8px;background:#5e5ce615;color:#5e5ce6;">今天</span>':'')+'</div>';
+        if(day.apps.length===0) tlh+='<div class="text-xs text-gray-400 py-2">暂无预约</div>';
+        else {
+            day.apps.sort(function(x,y){return x.start_slot-y.start_slot});
+            day.apps.forEach(function(a){
+                var dc=a.status_class==='completed'?'#30d158':'#007aff';
+                tlh+='<div class="tl-item"><div class="tl-dot" style="background:'+dc+'"></div><div class="tl-time">'+fmtTime(a.start)+' — '+fmtTime(a.end)+'</div><div class="tl-name">'+a.applicant+' · '+a.topic+'</div><div class="tl-tag '+(a.status_class==='completed'?'s-completed':'s-booked')+'" style="background:'+dc+'20;color:'+dc+'">'+(a.status_class==='completed'?'已完成':'已预约')+'</div></div>';
+            });
+        }
+        tlh+='</div>';
+    });
+    tlw.innerHTML=tlh;
+}
+
+// ===== 公示栏（时间最近在上） =====
+function loadBoard(){
+    api("/api/public-board").then(function(data){
+        var list=document.getElementById("board-preview");
+        if(data.board.length===0){list.innerHTML='<div class="text-center text-gray-400 py-5 text-sm">暂无公示记录</div>';return}
+        // 按时间倒序（最近在上）
+        data.board.sort(function(a,b){ return b.start_time.localeCompare(a.start_time); });
+        var h='';
+        data.board.forEach(function(item){
+            var photos=item.photos||[];
+            var byCat={};
+            photos.forEach(function(p){ if(!byCat[p.category]) byCat[p.category]=[]; byCat[p.category].push(p); });
+            var ok=item.score>=10, sc=item.score>=8?'#22c55e':item.score>=6?'#f59e0b':'#f43f5e';
+            var stH=parseInt(item.start_time.substring(11,13))+parseInt(item.start_time.substring(14,16))/60;
+            var dd=fmtDateDisplay(item.start_time);
+            var timeRange=item.start_time.substring(11,16)+' — '+item.end_time.substring(11,16);
+            h+='<div class="t-item"><div class="board-stamp" style="border-color:'+(ok?'#16a34a':'#dc2626')+';color:'+(ok?'#16a34a':'#dc2626')+'">'+(ok?'合格':'不合格')+'</div>';
+            h+='<div class="t-bar" style="background:'+getTimeColorCSS(stH)+'"></div><div class="t-body"><div class="t-row1"><span class="t-name">'+item.meeting_topic+'</span><span class="t-tag">'+item.department+'</span><span class="t-tag">'+item.applicant_name+'</span></div>';
+            h+='<div class="t-date-row"><span class="t-date">'+dd.date+'</span><span class="t-weekday'+(isTodayDate(item.start_time)?' today-chip':'')+'">'+dd.weekday+'</span></div>';
+            h+='<div class="mini-bar">'+renderMiniBar(item.start_time,item.end_time)+'</div><div class="t-time-labels"><span>07:30</span><span>09:00</span><span>10:30</span><span>12:00</span><span>13:30</span><span>15:00</span><span>16:30</span><span>18:00</span><span>19:30</span><span>21:00</span></div>';
+            h+='<div class="t-time-row"><span>'+timeRange+'</span>'+(item.meeting_type_name?'<span> · '+item.meeting_type_name+'</span>':'')+(item.on_site_contact?'<span> · '+item.on_site_contact+'</span>':'')+'</div>';
+            // 检查项卡片
+            h+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid #f3f4f6;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px;">';
+            h+=renderCheckCard('物品归位',item.items_returned||'--',byCat['returned']||[]);
+            h+=renderCheckCard('卫生保持',item.cleanliness||'--',byCat['cleanliness']||[]);
+            h+=renderCheckCard('公物损坏',item.damage||'无',byCat['damage']||[]);
+            h+='</div>';
+            h+='<div style="margin-top:6px;font-size:10px;color:#d1d5db;">申请时间：'+formatTime(item.app_created_at)+'</div></div>';
+            h+='<div class="t-right"><div class="t-num" style="color:'+sc+'">'+item.score+'</div><div class="t-label">得分</div></div></div>';
+        });
+        list.innerHTML=h;
+    }).catch(function(){});
+}
+
+function renderCheckCard(title, text, photos){
+    var h='<div style="background:#f9fafb;border-radius:8px;padding:6px 8px;"><div style="font-weight:600;color:#6b7280;margin-bottom:2px;font-size:10px;">'+title+'</div><div style="color:#1d1d1f;">'+text+'</div>';
+    if(photos.length>0){
+        h+='<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;">';
+        for(var j=0;j<photos.length;j++){
+            var fp=photos[j].file_path;
+            h+="<img src='/"+fp+"' style='width:36px;height:36px;object-fit:cover;border-radius:6px;cursor:pointer;' onclick='event.stopPropagation();openPreviewLightbox(\""+fp+"\")'>";
+        }
+        h+='</div>';
+    }
+    h+='</div>';
+    return h;
+}
+
+function openPreviewLightbox(src){
+    var lb=document.getElementById("preview-lightbox");
+    if(!lb){
+        lb=document.createElement("div");
+        lb.id="preview-lightbox";
+        lb.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;cursor:pointer;";
+        lb.onclick=function(){lb.style.display="none";};
+        lb.innerHTML='<img id="preview-lb-img" style="max-width:100%;max-height:90vh;border-radius:12px;object-fit:contain;" src="">';
+        document.body.appendChild(lb);
+    }
+    document.getElementById("preview-lb-img").src=src;
+    lb.style.display="flex";
+}
+
+// ===== 最近申请（时间最近在上） =====
+function loadRecent(){
+    api("/api/applications").then(function(data){
+        var apps=data.applications.slice(0,30), list=document.getElementById("recent-list");
+        if(apps.length===0){list.innerHTML='<div class="text-center text-gray-400 py-5 text-sm">暂无申请记录</div>';return}
+        // 按时间倒序
+        apps.sort(function(a,b){ return b.start_time.localeCompare(a.start_time); });
+        apps=apps.slice(0,8);
+        var h='';
+        apps.forEach(function(a){
+            var stH=parseInt(a.start_time.substring(11,13))+parseInt(a.start_time.substring(14,16))/60;
+            var dd=fmtDateDisplay(a.start_time);
+            h+='<a href="/applications/'+a.id+'" class="t-item" style="text-decoration:none;color:inherit;cursor:pointer">';
+            h+='<div class="t-bar" style="background:'+getTimeColorCSS(stH)+'"></div><div class="t-body"><div class="t-name">'+a.meeting_topic+'</div>';
+            h+='<div class="t-date-row"><span class="t-date">'+dd.date+'</span><span class="t-weekday'+(isTodayDate(a.start_time)?' today-chip':'')+'">'+dd.weekday+'</span></div>';
+            h+='<div class="mini-bar">'+renderMiniBar(a.start_time,a.end_time)+'</div><div class="t-time-labels"><span>07:30</span><span>09:00</span><span>10:30</span><span>12:00</span><span>13:30</span><span>15:00</span><span>16:30</span><span>18:00</span><span>19:30</span><span>21:00</span></div></div>';
+            h+='<div class="t-time-row"><span>'+a.start_time.substring(11,16)+' — '+a.end_time.substring(11,16)+'</span><span>· '+a.meeting_type_name+'</span>'+(a.on_site_contact?'<span>· '+a.on_site_contact+'</span>':'')+'</div>';
+            h+='<div class="t-right">'+statusBadge(a.status)+'</div></a>';
+        });
+        list.innerHTML=h;
+    }).catch(function(){});
+}
+
+api("/api/applications/calendar").then(renderCalendar).catch(function(e){
+    document.getElementById('day-cards').innerHTML='<div class="text-center text-red-400 py-8">加载失败: '+e.message+'</div>';
+});
+loadBoard(); loadRecent();
+</script>
+{% endblock %}

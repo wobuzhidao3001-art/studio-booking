@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold text-gray-800 mb-6">提交演播厅使用申请</h2>
+<div class="card max-w-2xl">
+    <form id="apply-form" onsubmit="handleSubmit(event)">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div><label class="label" for="department">申请学部</label><input id="department" class="input" readonly></div>
+            <div><label class="label" for="on_site_contact">现场负责人</label><input id="on_site_contact" class="input" placeholder="负责人姓名"></div>
+            <div><label class="label" for="contact">联系方式</label><input id="contact" class="input" required placeholder="手机号码"></div>
+            <div></div>
+            <div class="md:col-span-2"><label class="label" for="meeting_topic">会议主题</label><input id="meeting_topic" class="input" required placeholder="请输入会议主题"></div>
+            <div><label class="label" for="meeting_type_id">会议类型</label><select id="meeting_type_id" class="input" required><option value="">请选择</option></select></div>
+            <div></div>
+        </div>
+
+        <!-- ====== Time Picker ====== -->
+        <div class="mt-6 mb-2"><label class="label">预约时间 <span id="max-duration-label" class="text-xs text-gray-400 font-normal">（最长3小时，点击色块选择时间段）</span></label></div>
+        <div id="time-picker" class="border-2 border-gray-200 rounded-2xl p-4 bg-gray-50/50">
+            <!-- Date strip -->
+            <div class="flex items-center gap-2 mb-3">
+                <button type="button" onclick="shiftDate(-7)" class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-200"><i class="fa-solid fa-chevron-left text-xs"></i></button>
+                <div id="date-strip" class="flex gap-1.5 overflow-x-auto flex-1" style="scrollbar-width:none"></div>
+                <button type="button" onclick="shiftDate(7)" class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-200"><i class="fa-solid fa-chevron-right text-xs"></i></button>
+            </div>
+            <!-- Legend -->
+            <div class="flex gap-3 mb-2 flex-wrap text-xs text-gray-500">
+                <span><span class="inline-block w-3 h-3 rounded mr-1 align-middle" style="background:#ff9f0a"></span>上午</span>
+                <span><span class="inline-block w-3 h-3 rounded mr-1 align-middle" style="background:#ff6b9d"></span>午间</span>
+                <span><span class="inline-block w-3 h-3 rounded mr-1 align-middle" style="background:#007aff"></span>下午</span>
+                <span><span class="inline-block w-3 h-3 rounded mr-1 align-middle" style="background:#5e5ce6"></span>晚间</span>
+            </div>
+            <!-- Selection info -->
+            <div id="sel-info" class="rounded-xl px-4 py-2.5 mb-2 flex items-center justify-between min-h-[44px] transition-all bg-white border border-gray-200">
+                <span id="sel-placeholder" class="text-gray-400 text-sm">请先选择日期，再点击色块选择时间段</span>
+                <span id="sel-range" class="hidden font-bold text-base"></span>
+                <span id="sel-count" class="hidden text-xs text-gray-500"></span>
+            </div>
+            <!-- Time slots -->
+            <div id="slot-grid" class="grid grid-cols-9 gap-1.5"></div>
+            <p id="time-error" class="text-red-500 text-xs mt-2 hidden"></p>
+        </div>
+        <!-- ====== End Time Picker ====== -->
+
+        <div class="mt-5 md:col-span-2"><label class="label" for="remarks">备注</label><textarea id="remarks" class="input" rows="3" placeholder="其他需要说明的事项（选填）"></textarea></div>
+
+        <div id="form-error" class="text-red-500 text-sm mt-4 hidden"></div>
+        <button type="submit" class="btn-primary mt-6 w-full md:w-auto px-8"><i class="fa-solid fa-paper-plane mr-2"></i>提交申请</button>
+    </form>
+</div>
+
+<style>
+.date-chip { flex-shrink:0; width:52px; padding:6px 0 5px; border-radius:12px; border:1.5px solid transparent; background:#e5e7eb; text-align:center; cursor:pointer; transition:all 0.15s; user-select:none; }
+.date-chip:hover { background:#d1d5db; }
+.date-chip .dw { font-size:10px; color:#6b7280; line-height:1.2; font-weight:500; }
+.date-chip .dn { font-size:18px; font-weight:700; color:#1f2937; line-height:1.3; }
+.date-chip.today { background:#ede9fe; border-color:#c4b5fd; }
+.date-chip.today .dn { color:#7c3aed; }
+.date-chip.active { background:linear-gradient(135deg,#2563eb,#4f46e5); border-color:#2563eb; box-shadow:0 2px 8px rgba(37,99,235,0.25); }
+.date-chip.active .dw, .date-chip.active .dn { color:#fff; }
+.date-chip.past { opacity:0.35; pointer-events:none; }
+.slot { border-radius:6px; cursor:pointer; height:32px; transition:all 0.12s; border:1.5px solid transparent; }
+.slot.free { background:#e5e7eb; }
+.slot.free:hover { background:#d1d5db; transform:scale(1.05); }
+.slot.morning { background:#fed7aa; }
+.slot.morning:hover { background:#fdba74; }
+.slot.midday { background:#fbcfe8; }
+.slot.midday:hover { background:#f9a8d4; }
+.slot.afternoon { background:#bfdbfe; }
+.slot.afternoon:hover { background:#93c5fd; }
+.slot.evening { background:#c7d2fe; }
+.slot.evening:hover { background:#a5b4fc; }
+.slot.midnight { background:#d1d5db; }
+.slot.selected { border-color:#1f2937 !important; filter:brightness(0.85); transform:scale(1.05); }
+.slot.sel-start { border-right:none; border-radius:6px 0 0 6px; }
+.slot.sel-end { border-left:none; border-radius:0 6px 6px 0; }
+.slot.sel-mid { border-left:none; border-right:none; border-radius:0; }
+.slot.sel-single { border-radius:6px; }
+</style>
+
+<script>
+var selectedDate = null;
+var selectedIndices = [];
+var MAX_SLOTS = 6;
+var MAX_MINUTES = 180;
+var dateOffset = 0;
+var WEEKDAYS = ['日','一','二','三','四','五','六'];
+
+function getSlotTime(idx) { return 7.5 + idx * 0.5; }
+function timeStr(h) { var ih=Math.floor(h), im=(h-ih)*60; return String(ih).padStart(2,'0')+':'+String(im).padStart(2,'0'); }
+function getTimeColor(h) { if(h<9)return'morning';if(h<12)return'midday';if(h<17)return'afternoon';return'evening'; }
+function fmtDisplay(d) { var y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+day; }
+function todayStr() { var d=new Date(); return fmtDisplay(d); }
+
+function fmtDuration(minutes) {
+    var h = Math.floor(minutes / 60);
+    var m = minutes % 60;
+    if (m === 0) return h + '小时';
+    return h + '小时' + m + '分钟';
+}
+
+function renderDates() {
+    var strip=document.getElementById('date-strip');
+    var today=new Date(); today.setHours(0,0,0,0);
+    var base=new Date(today); base.setDate(base.getDate()+dateOffset);
+    var h='';
+    for(var i=0;i<7;i++){
+        var d=new Date(base); d.setDate(d.getDate()+i);
+        var ds=fmtDisplay(d);
+        var isToday=ds===todayStr();
+        var isPast=d<today;
+        var isActive=selectedDate&&ds===selectedDate;
+        h+='<div class="date-chip'+(isToday?' today':'')+(isActive?' active':'')+(isPast?' past':'')+'" data-date="'+ds+'" onclick="pickDate(\''+ds+'\')"><div class="dw">'+(isToday?'今天':('周'+WEEKDAYS[d.getDay()]))+'</div><div class="dn">'+d.getDate()+'</div></div>';
+    }
+    strip.innerHTML=h;
+}
+
+function pickDate(ds) {
+    selectedDate=ds; selectedIndices=[]; renderDates(); renderSlots(); updateSelInfo();
+}
+
+function shiftDate(n) { dateOffset+=n; renderDates(); }
+
+function renderSlots() {
+    var grid=document.getElementById('slot-grid');
+    var h='';
+    for(var i=0;i<27;i++){
+        var t=getSlotTime(i);
+        var col=getTimeColor(t);
+        var sel='';
+        if(selectedIndices.indexOf(i)>=0){
+            var sorted=selectedIndices.slice().sort(function(a,b){return a-b});
+            if(sorted.length===1) sel='selected sel-single';
+            else if(i===sorted[0]) sel='selected sel-start';
+            else if(i===sorted[sorted.length-1]) sel='selected sel-end';
+            else sel='selected sel-mid';
+        }
+        h+='<div class="slot free '+col+' '+sel+'" data-idx="'+i+'" title="'+timeStr(t)+'" onclick="clickSlot('+i+')"></div>';
+    }
+    grid.innerHTML=h;
+}
+
+function clickSlot(idx) {
+    if(!selectedDate) return;
+    var i=selectedIndices.indexOf(idx);
+    if(i>=0){ selectedIndices.splice(i,1); }else{ if(selectedIndices.length===0){ selectedIndices.push(idx); }else{ var all=selectedIndices.concat([idx]).sort(function(a,b){return a-b}); var ok=true; for(var j=1;j<all.length;j++){ if(all[j]-all[j-1]!==1){ok=false;break} } if(!ok){ selectedIndices=[idx]; }else{ if(all.length>MAX_SLOTS) return; selectedIndices.push(idx); } } }
+    if(selectedIndices.length>0) selectedIndices.sort(function(a,b){return a-b});
+    renderSlots(); updateSelInfo();
+}
+
+function updateSelInfo() {
+    var ph=document.getElementById('sel-placeholder'), ra=document.getElementById('sel-range'), cn=document.getElementById('sel-count');
+    if(!selectedDate || selectedIndices.length===0){
+        ph.classList.remove('hidden'); ra.classList.add('hidden'); cn.classList.add('hidden');
+        ph.textContent=selectedDate?'已选 '+selectedDate+'，请点击色块选择时间段':'请先选择日期，再点击色块选择时间段';
+    }else{
+        ph.classList.add('hidden'); ra.classList.remove('hidden'); cn.classList.remove('hidden');
+        var sorted=selectedIndices.slice().sort(function(a,b){return a-b});
+        var first=getSlotTime(sorted[0]), last=getSlotTime(sorted[sorted.length-1]);
+        ra.innerHTML='<i class="fa-regular fa-clock mr-1"></i>'+timeStr(first)+' — '+timeStr(last+0.5);
+        cn.textContent=sorted.length+'个时段 · '+sorted.length*30+'分钟 / 最长'+fmtDuration(MAX_MINUTES);
+    }
+}
+
+function getStartEnd() {
+    if(!selectedDate||selectedIndices.length===0) return null;
+    var sorted=selectedIndices.slice().sort(function(a,b){return a-b});
+    var start=selectedDate+'T'+timeStr(getSlotTime(sorted[0]));
+    var end=selectedDate+'T'+timeStr(getSlotTime(sorted[sorted.length-1]+0.5));
+    return {start_time:start, end_time:end};
+}
+
+document.getElementById("department").value = USER.department || "";
+
+(async function(){
+    try {
+        var t=await api("/api/meeting-types");
+        var s=document.getElementById("meeting_type_id");
+        t.types.forEach(function(x){s.innerHTML+='<option value="'+x.id+'">'+x.name+'</option>'});
+    }catch(e){}
+})();
+
+// Fetch dynamic config
+(async function(){
+    try {
+        var cfg = await api("/api/config/public");
+        if (cfg.max_booking_minutes) {
+            MAX_MINUTES = cfg.max_booking_minutes;
+            MAX_SLOTS = Math.floor(MAX_MINUTES / 30);
+            var lbl = document.getElementById("max-duration-label");
+            if (lbl) lbl.textContent = '（最长' + fmtDuration(MAX_MINUTES) + '，点击色块选择时间段）';
+        }
+    } catch(e) { /* use defaults */ }
+})();
+
+function validateTime() {
+    var se=getStartEnd();
+    if(!se){ document.getElementById('time-error').textContent='请选择预约时间'; document.getElementById('time-error').classList.remove('hidden'); return false; }
+    var d=new Date(se.end_time)-new Date(se.start_time);
+    if(d>MAX_MINUTES*60*1000){ document.getElementById('time-error').textContent='超过'+fmtDuration(MAX_MINUTES)+'，分两次或多次进行申请'; document.getElementById('time-error').classList.remove('hidden'); return false; }
+    document.getElementById('time-error').classList.add('hidden');
+    return true;
+}
+
+async function handleSubmit(e){
+    e.preventDefault();
+    var errEl=document.getElementById('form-error');
+    errEl.classList.add('hidden');
+    if(!validateTime()) return;
+    var se=getStartEnd();
+    var p={
+        department:document.getElementById('department').value,
+        contact:document.getElementById('contact').value.trim(),
+        meeting_topic:document.getElementById('meeting_topic').value.trim(),
+        meeting_type_id:parseInt(document.getElementById('meeting_type_id').value),
+        start_time:se.start_time,
+        end_time:se.end_time,
+        remarks:document.getElementById('remarks').value.trim(),
+        on_site_contact:document.getElementById('on_site_contact').value.trim()
+    };
+    try {
+        await api("/api/applications",{method:"POST",body:JSON.stringify(p)});
+        showToast("申请提交成功！");
+        setTimeout(function(){window.location.href="/my-applications"},800);
+    } catch(e) {
+        errEl.textContent=e.message;
+        errEl.classList.remove('hidden');
+    }
+}
+
+renderDates();
+renderSlots();
+</script>
+{% endblock %}

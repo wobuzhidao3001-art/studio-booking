@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-2xl font-bold text-gray-800 mb-6">用户管理</h2>
+<div class="flex justify-between items-center mb-4">
+    <span class="text-sm text-gray-500">管理系统所有用户及角色分配</span>
+    <button onclick="openUserModal()" class="btn-primary"><i class="fa-solid fa-plus mr-2"></i>新增用户</button>
+</div>
+<div class="card overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead><tr class="border-b text-left text-gray-500"><th class="py-3 px-3">ID</th><th class="py-3 px-3">用户名</th><th class="py-3 px-3">姓名</th><th class="py-3 px-3">学部</th><th class="py-3 px-3">角色</th><th class="py-3 px-3">状态</th><th class="py-3 px-3">操作</th></tr></thead>
+        <tbody id="user-tbody"><tr><td colspan="7" class="py-8 text-center text-gray-400">加载中...</td></tr></tbody>
+    </table>
+</div>
+
+<div id="user-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-4"><h3 class="text-xl font-bold text-gray-800" id="user-modal-title">新增用户</h3><button onclick="closeUserModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button></div>
+        <form onsubmit="saveUser(event)" id="user-form">
+            <input type="hidden" id="edit-user-id">
+            <div class="space-y-4">
+                <div><label class="label">用户名</label><input id="u-username" class="input" required></div>
+                <div id="pwd-group"><label class="label">密码</label><input id="u-password" type="password" class="input"></div>
+                <div><label class="label">真实姓名</label><input id="u-realname" class="input" required></div>
+                <div><label class="label">学部</label><select id="u-dept" class="input" required><option value="">请选择</option></select></div>
+                <div><label class="label">电话</label><input id="u-phone" class="input"></div>
+                <div><label class="label">角色</label><div class="flex flex-wrap gap-2 mt-1" id="role-checkboxes">
+                    <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" value="applicant" checked> 申请人</label>
+                    <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" value="dept_supervisor"> 部门主管</label>
+                    <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" value="studio_manager"> 演播厅主管</label>
+                    <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" value="executor"> 执行管理员</label>
+                    <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" value="admin"> 系统管理员</label>
+                </div></div>
+            </div>
+            <div id="user-form-error" class="text-red-500 text-sm mt-3 hidden"></div>
+            <button type="submit" class="btn-primary w-full mt-4">保存</button>
+        </form>
+    </div>
+</div>
+
+<script>
+var RN = {admin:"系统管理员",applicant:"申请人",dept_supervisor:"部门主管",studio_manager:"演播厅主管",executor:"执行管理员"};
+function rn(r) { return RN[r] || r; }
+
+async function loadUsers() {
+    try { var d = await api("/api/users"); var tbody = document.getElementById("user-tbody"); var h = "";
+        d.users.forEach(function(u){h += '<tr class="border-b hover:bg-gray-50"><td class="py-3 px-3">'+u.id+'</td><td class="py-3 px-3 font-medium">'+u.username+'</td><td class="py-3 px-3">'+u.real_name+'</td><td class="py-3 px-3">'+u.department+'</td><td class="py-3 px-3"><div class="flex gap-1 flex-wrap">'+(u.roles||[]).map(function(r){return '<span class="badge badge-info">'+rn(r)+'</span>'}).join("")+'</div></td><td class="py-3 px-3">'+(u.is_active?'<span class="text-green-600">启用</span>':'<span class="text-red-600">禁用</span>')+'</td><td class="py-3 px-3"><button onclick="editUser('+u.id+')" class="text-primary-600 hover:text-primary-800 mr-3"><i class="fa-solid fa-pen"></i></button><button onclick="toggleUser('+u.id+','+u.is_active+')" class="'+(u.is_active?'text-red-500':'text-green-500')+' hover:opacity-80 mr-3"><i class="fa-solid '+(u.is_active?'fa-ban':'fa-check')+'"></i></button><button onclick="deleteUser('+u.id+')" class="text-red-500 hover:text-red-700"><i class="fa-solid fa-trash"></i></button></td></tr>'});
+        tbody.innerHTML = h; } catch(e) { document.getElementById("user-tbody").innerHTML = '<tr><td colspan="7" class="py-8 text-center text-red-400">'+e.message+'</td></tr>'; }
+}
+async function loadDepts() { try { var d = await api("/api/users/departments"); var sel = document.getElementById("u-dept"); sel.innerHTML = '<option value="">请选择</option>'; d.departments.forEach(function(x){sel.innerHTML += '<option value="'+x.name+'">'+x.name+'</option>'}) } catch(e) {} }
+function openUserModal(user) {
+    document.getElementById("edit-user-id").value=""; document.getElementById("u-username").value=""; document.getElementById("u-password").value=""; document.getElementById("u-realname").value=""; document.getElementById("u-dept").value=""; document.getElementById("u-phone").value="";
+    document.getElementById("pwd-group").classList.remove("hidden"); document.getElementById("user-modal-title").textContent="新增用户"; document.getElementById("u-username").disabled=false;
+    document.querySelectorAll("#role-checkboxes input").forEach(function(cb){cb.checked=cb.value==="applicant"});
+    loadDepts();
+    if (user) { document.getElementById("edit-user-id").value=user.id; document.getElementById("u-username").value=user.username; document.getElementById("u-username").disabled=true; document.getElementById("u-realname").value=user.real_name; document.getElementById("u-dept").value=user.department; document.getElementById("u-phone").value=user.phone||""; document.getElementById("pwd-group").classList.remove("hidden"); document.getElementById("u-password").placeholder="留空则不修改"; document.getElementById("user-modal-title").textContent="编辑用户"; document.querySelectorAll("#role-checkboxes input").forEach(function(cb){cb.checked=(user.roles||[]).indexOf(cb.value)>=0}) }
+    document.getElementById("user-modal").classList.remove("hidden");
+}
+function closeUserModal() { document.getElementById("user-modal").classList.add("hidden") }
+async function editUser(id) { try { var d = await api("/api/users"); var u = d.users.find(function(x){return x.id===id}); if(u) openUserModal(u) } catch(e){showToast(e.message,"error")} }
+async function saveUser(e) {
+    e.preventDefault(); var id=document.getElementById("edit-user-id").value; var pwd=document.getElementById("u-password").value; var dept=document.getElementById("u-dept").value; var roles=Array.from(document.querySelectorAll("#role-checkboxes input:checked")).map(function(cb){return cb.value}); var errEl=document.getElementById("user-form-error"); errEl.classList.add("hidden");
+    if(!dept){errEl.textContent="请选择学部";errEl.classList.remove("hidden");return}
+    try { if(id) { var body={real_name:document.getElementById("u-realname").value.trim(),department:dept,phone:document.getElementById("u-phone").value.trim(),roles:roles}; if(pwd) body.password=pwd; await api("/api/users/"+id,{method:"PUT",body:JSON.stringify(body)}); showToast("已更新") } else { if(!pwd){errEl.textContent="请输入密码";errEl.classList.remove("hidden");return} await api("/api/users",{method:"POST",body:JSON.stringify({username:document.getElementById("u-username").value.trim(),password:pwd,real_name:document.getElementById("u-realname").value.trim(),department:dept,phone:document.getElementById("u-phone").value.trim(),roles:roles})}); showToast("已创建") } closeUserModal(); loadUsers() } catch(e){errEl.textContent=e.message;errEl.classList.remove("hidden")}
+}
+async function toggleUser(id,cur) { try { await api("/api/users/"+id,{method:"PUT",body:JSON.stringify({is_active:cur?0:1})}); showToast(cur?"已禁用":"已启用"); loadUsers() } catch(e){showToast(e.message,"error")} }
+async function deleteUser(id) { if(!confirm("确认删除？")) return; try { await apiDel("/api/users/"+id); showToast("已删除"); loadUsers() } catch(e){showToast(e.message,"error")} }
+loadUsers();
+</script>
+{% endblock %}
